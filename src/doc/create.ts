@@ -1,7 +1,36 @@
 import { insertNodes, loadNodes, nodes } from "./store";
 import { ROOT, type NodeKind, type SceneNode } from "./types";
 
-const LABELS: Record<NodeKind, string> = { document: "Document", page: "Page", frame: "Frame", rect: "Rectangle" };
+const LABELS: Record<NodeKind, string> = {
+  document: "Document",
+  page: "Page",
+  frame: "Frame",
+  group: "Group",
+  rect: "Rectangle",
+  ellipse: "Ellipse",
+  image: "Image",
+};
+
+const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
+  name: "",
+  parent: "",
+  children: [],
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  rotation: 0,
+  visible: true,
+  locked: false,
+  opacity: 1,
+  fill: null,
+  stroke: null,
+  radius: 0,
+  clip: false,
+  asset: "",
+  fit: "cover",
+  version: 0,
+};
 
 export function createId(): string {
   const parts = crypto.getRandomValues(new Uint32Array(2));
@@ -14,26 +43,17 @@ export function nextName(kind: NodeKind): string {
   return `${LABELS[kind]} ${count}`;
 }
 
+export const normalizeNode = (node: SceneNode): SceneNode => ({ ...DEFAULTS, ...node });
+
 export function createNode(kind: NodeKind, props: Partial<SceneNode> = {}): SceneNode {
   return {
+    ...DEFAULTS,
     id: createId(),
     kind,
     name: LABELS[kind],
-    parent: "",
     children: [],
-    x: 0,
-    y: 0,
-    width: 0,
-    height: 0,
-    rotation: 0,
-    visible: true,
-    locked: false,
-    opacity: 1,
-    fill: kind === "frame" ? { color: "#ffffff", opacity: 1 } : kind === "rect" ? { color: "#d9d9d9", opacity: 1 } : null,
-    stroke: null,
-    radius: 0,
+    fill: kind === "frame" ? { color: "#ffffff", opacity: 1 } : kind === "rect" || kind === "ellipse" ? { color: "#d9d9d9", opacity: 1 } : null,
     clip: kind === "frame",
-    version: 0,
     ...props,
   };
 }

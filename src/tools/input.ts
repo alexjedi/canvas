@@ -1,5 +1,7 @@
-import { fitIfNeeded, zoomAt } from "../editor/actions";
-import { camera, editor, setCamera, toWorld, viewport, type ToolId } from "../editor/state";
+import { ancestors, hitTest } from "../doc/geometry";
+import { flushDirty } from "../doc/store";
+import { addImages, fitIfNeeded, zoomAt } from "../editor/actions";
+import { camera, editor, select, setCamera, toWorld, viewport, type ToolId } from "../editor/state";
 import { invalidate, subscribe } from "../frame";
 import { createShapeTool } from "./create";
 import { handTool } from "./hand";
@@ -17,10 +19,12 @@ const TOOLS: Record<ToolId, Tool> = {
   scale: createSelectTool(true),
   frame: createShapeTool("frame"),
   rect: createShapeTool("rect"),
+  ellipse: createShapeTool("ellipse"),
   hand: handTool,
 };
 
 const ZOOM_SPEED = 0.01;
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function attachInput(canvas: HTMLCanvasElement) {
   let active: Tool | null = null;
@@ -42,13 +46,30 @@ export function attachInput(canvas: HTMLCanvasElement) {
       sy,
       shift: event.shiftKey,
       alt: event.altKey,
-      meta: event.metaKey || event.ctrlKey,
+      meta: event.metaKey || (event.ctrlKey && !IS_MAC),
       clicks: event.detail,
     };
   }
 
+  function selectForMenu(pointer: Pointer) {
+    const hit = hitTest(editor.page, pointer.x, pointer.y);
+    if (!hit) {
+      select([]);
+      return;
+    }
+    const chain = [hit, ...ancestors(hit.id)];
+    if (chain.some((node) => editor.selected.has(node.id))) return;
+    const top = chain[chain.length - 1];
+    select([top.kind === "frame" && chain.length > 1 ? chain[chain.length - 2].id : top.id]);
+  }
+
   function onPointerDown(event: PointerEvent) {
-    if (active || (event.button !== 0 && event.button !== 1)) return;
+    if (active) return;
+    if (event.button === 2 || (event.button === 0 && event.ctrlKey && IS_MAC)) {
+      selectForMenu(pointerOf(event));
+      return;
+    }
+    if (event.button !== 0 && event.button !== 1) return;
     if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
     canvas.setPointerCapture(event.pointerId);
     active = event.button === 1 ? handTool : current();
@@ -61,6 +82,7 @@ export function attachInput(canvas: HTMLCanvasElement) {
     const pointer = pointerOf(event);
     if (active) {
       active.drag(pointer);
+      flushDirty();
       return;
     }
     const tool = current();
@@ -100,6 +122,18 @@ export function attachInput(canvas: HTMLCanvasElement) {
     const gesture = event as GestureEvent;
     const bounds = canvas.getBoundingClientRect();
     zoomAt(gesture.clientX - bounds.left, gesture.clientY - bounds.top, gestureZoom * gesture.scale);
+  }
+
+  function onDragOver(event: DragEvent) {
+    if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+  }
+
+  function onDrop(event: DragEvent) {
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (files.length === 0) return;
+    event.preventDefault();
+    const pointer = pointerOf(event);
+    void addImages(files, { x: pointer.x, y: pointer.y });
   }
 
   function isTyping(event: KeyboardEvent) {
@@ -162,6 +196,8 @@ export function attachInput(canvas: HTMLCanvasElement) {
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("gesturestart", onGestureStart);
   canvas.addEventListener("gesturechange", onGestureChange);
+  canvas.addEventListener("dragover", onDragOver);
+  canvas.addEventListener("drop", onDrop);
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
   window.addEventListener("blur", onBlur);
@@ -176,6 +212,8 @@ export function attachInput(canvas: HTMLCanvasElement) {
     canvas.removeEventListener("wheel", onWheel);
     canvas.removeEventListener("gesturestart", onGestureStart);
     canvas.removeEventListener("gesturechange", onGestureChange);
+    canvas.removeEventListener("dragover", onDragOver);
+    canvas.removeEventListener("drop", onDrop);
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("blur", onBlur);

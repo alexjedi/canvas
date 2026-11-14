@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Eye, EyeOff, Frame, Lock, LockOpen, Square } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Lock, LockOpen } from "lucide-react";
 import { useEffect, useRef, type DragEvent, type MouseEvent } from "react";
 import { isDescendant } from "../../doc/geometry";
 import { nodes } from "../../doc/store";
@@ -7,6 +7,7 @@ import { clearDrop, editor, select, setDrop, setHover, toggleExpanded, type Drop
 import { cx } from "../controls/cx";
 import { useFrame, useNodeVersion } from "../hooks";
 import { InlineName } from "./InlineName";
+import { LayerIcon } from "./LayerIcon";
 import { LayerToggle } from "./LayerToggle";
 
 const INDENT = 14;
@@ -25,7 +26,7 @@ export function LayerRow({ id, depth }: { id: string; depth: number }) {
   }, [selected]);
 
   if (!node) return null;
-  const isFrame = node.kind === "frame";
+  const isFrame = node.kind === "frame" || node.kind === "group";
   const hasChildren = node.children.length > 0;
 
   function onClick(event: MouseEvent) {
@@ -70,6 +71,7 @@ export function LayerRow({ id, depth }: { id: string; depth: number }) {
         ref={ref}
         draggable
         onClick={onClick}
+        onContextMenu={() => !editor.selected.has(id) && select([id])}
         onPointerEnter={() => setHover(id)}
         onPointerLeave={() => setHover("")}
         onDragStart={onDragStart}
@@ -95,7 +97,9 @@ export function LayerRow({ id, depth }: { id: string; depth: number }) {
         >
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
-        <span className="shrink-0 text-tx-3">{isFrame ? <Frame size={12} /> : <Square size={12} />}</span>
+        <span className="shrink-0 text-tx-3">
+          <LayerIcon kind={node.kind} />
+        </span>
         <InlineName name={node.name} onRename={(name) => renameNode(id, name)} />
         <LayerToggle label={node.locked ? "Unlock" : "Lock"} pinned={node.locked} onToggle={() => toggleFlag(id, "locked")}>
           {node.locked ? <Lock size={12} /> : <LockOpen size={12} />}

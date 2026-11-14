@@ -1,6 +1,6 @@
-import { Frame, Hand, MousePointer2, Redo2, Scaling, Square, SunMoon, Undo2 } from "lucide-react";
+import { Circle, Frame, Hand, ImagePlus, MousePointer2, Redo2, Scaling, Square, SunMoon, Undo2 } from "lucide-react";
 import { canRedo, canUndo } from "../doc/store";
-import { redoAction, toggleTheme, undoAction } from "../editor/actions";
+import { pickImages, redoAction, toggleTheme, undoAction } from "../editor/actions";
 import { IconButton } from "./controls/IconButton";
 import { useFrame } from "./hooks";
 import { ToolButton } from "./ToolButton";
@@ -25,6 +25,12 @@ export function Toolbar() {
         <ToolButton tool="rect" tip="Rectangle (R)">
           <Square size={15} />
         </ToolButton>
+        <ToolButton tool="ellipse" tip="Ellipse (O)">
+          <Circle size={15} />
+        </ToolButton>
+        <IconButton tip="Image (⇧⌘K)" onClick={pickImages}>
+          <ImagePlus size={15} />
+        </IconButton>
         <ToolButton tool="hand" tip="Hand (H)">
           <Hand size={15} />
         </ToolButton>

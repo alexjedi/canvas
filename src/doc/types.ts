@@ -1,4 +1,5 @@
-export type NodeKind = "document" | "page" | "frame" | "rect";
+export type NodeKind = "document" | "page" | "frame" | "group" | "rect" | "ellipse" | "image";
+export type ImageFit = "cover" | "contain" | "stretch" | "tile";
 export type StrokeAlign = "inside" | "center" | "outside";
 
 export interface Paint {
@@ -29,6 +30,8 @@ export interface SceneNode {
   stroke: Stroke | null;
   radius: number;
   clip: boolean;
+  asset: string;
+  fit: ImageFit;
   version: number;
 }
 

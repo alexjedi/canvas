@@ -1,8 +1,11 @@
-import { addPage, cloneNodes, collectSubtree } from "../doc/create";
-import { isContainer, reparent, sortByOrder, topLevel, unionBounds } from "../doc/geometry";
+import { importImage } from "../doc/assets";
+import { addPage, cloneNodes, collectSubtree, createNode, nextName } from "../doc/create";
+import { apply, frameAt, invert, isContainer, mat, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
+import { resizeNode } from "../doc/groups";
 import { canRedo, canUndo, edit, insertNodes, moveNode, nodes, redo, removeNode, setProps, transact, undo } from "../doc/store";
-import { ROOT, type NodeProps, type SceneNode } from "../doc/types";
-import { camera, editor, sanitize, select, setCamera, setPage, viewport, type DropPosition } from "./state";
+import { ROOT, type NodeProps, type Point, type SceneNode } from "../doc/types";
+import { grid } from "./prefs";
+import { camera, editor, sanitize, select, setCamera, setPage, toWorld, viewport, type DropPosition } from "./state";
 
 const FIT_PADDING = 64;
 const DUPLICATE_GAP = 100;
@@ -67,10 +70,19 @@ export function duplicateSelection() {
   select(created);
 }
 
-export function copySelection() {
+export function copySelection(): string {
   const ids = roots();
-  if (ids.length) clipboard = ids.map(snapshotTree);
+  if (!ids.length) return "";
+  clipboard = ids.map(snapshotTree);
+  return ids.map((id) => nodes.get(id)?.name ?? "").join("\n");
 }
+
+export function copyToSystem() {
+  const text = copySelection();
+  if (text) navigator.clipboard?.writeText(text).catch(() => {});
+}
+
+export const hasClipboard = () => clipboard.length > 0;
 
 export function pasteClipboard() {
   if (!clipboard.length) return;
@@ -163,6 +175,142 @@ export function dropLayers(targetId: string, position: DropPosition) {
 export function renameNode(id: string, name: string) {
   const next = name.trim();
   if (next && nodes.get(id)?.name !== next) setProps(id, { name: next });
+}
+
+export type AlignMode = "left" | "center" | "right" | "top" | "middle" | "bottom";
+
+export function alignSelection(mode: AlignMode) {
+  const ids = roots();
+  if (!ids.length) return;
+  const single = nodes.get(ids[0]);
+  const parent = nodes.get(single?.parent ?? "");
+  const target = ids.length > 1 ? unionBounds(ids) : parent && !isContainer(parent) ? worldBounds(parent) : null;
+  if (!target) return;
+  transact(() => {
+    for (const id of ids) {
+      const node = nodes.get(id);
+      if (!node) continue;
+      const bounds = worldBounds(node);
+      let dx = 0;
+      let dy = 0;
+      if (mode === "left") dx = target.x - bounds.x;
+      else if (mode === "center") dx = target.x + target.width / 2 - bounds.x - bounds.width / 2;
+      else if (mode === "right") dx = target.x + target.width - bounds.x - bounds.width;
+      else if (mode === "top") dy = target.y - bounds.y;
+      else if (mode === "middle") dy = target.y + target.height / 2 - bounds.y - bounds.height / 2;
+      else dy = target.y + target.height - bounds.y - bounds.height;
+      translateWorld(id, dx, dy);
+    }
+  });
+}
+
+export function distributeSelection(axis: "horizontal" | "vertical") {
+  const items = roots()
+    .map((id) => nodes.get(id))
+    .filter((node): node is SceneNode => !!node)
+    .map((node) => ({ id: node.id, bounds: worldBounds(node) }));
+  if (items.length < 3) return;
+  const horizontal = axis === "horizontal";
+  const start = (item: (typeof items)[number]) => (horizontal ? item.bounds.x : item.bounds.y);
+  const size = (item: (typeof items)[number]) => (horizontal ? item.bounds.width : item.bounds.height);
+  items.sort((a, b) => start(a) - start(b));
+  const last = items[items.length - 1];
+  const total = items.reduce((sum, item) => sum + size(item), 0);
+  const gap = (start(last) + size(last) - start(items[0]) - total) / (items.length - 1);
+  transact(() => {
+    let cursor = start(items[0]);
+    for (const item of items) {
+      const delta = cursor - start(item);
+      translateWorld(item.id, horizontal ? delta : 0, horizontal ? 0 : delta);
+      cursor += size(item) + gap;
+    }
+  });
+}
+
+export function groupSelection() {
+  const ids = roots();
+  const top = nodes.get(ids[ids.length - 1] ?? "");
+  const parent = nodes.get(top?.parent ?? "");
+  if (!top || !parent) return;
+  const group = createNode("group", { name: nextName("group") });
+  transact(() => {
+    insertNodes([group], parent.id, parent.children.indexOf(top.id) + 1);
+    for (const id of ids) reparent(id, group.id);
+  });
+  select([group.id]);
+}
+
+export function ungroupSelection() {
+  const released: string[] = [];
+  transact(() => {
+    for (const id of roots()) {
+      const group = nodes.get(id);
+      const parent = nodes.get(group?.parent ?? "");
+      if (!group || !parent || (group.kind !== "group" && group.kind !== "frame") || group.children.length === 0) continue;
+      for (const child of group.children.slice()) {
+        reparent(child, parent.id, parent.children.indexOf(id));
+        released.push(child);
+      }
+      if (nodes.has(id)) removeNode(id);
+    }
+  });
+  if (released.length) select(released);
+}
+
+export function toggleSelected(key: "visible" | "locked") {
+  const ids = editor.selection;
+  if (!ids.length) return;
+  const value = !ids.every((id) => nodes.get(id)?.[key]);
+  transact(() => ids.forEach((id) => setProps(id, { [key]: value })));
+  if (key === "locked" && value) select([]);
+}
+
+export function resizeSelected(key: "width" | "height", value: number) {
+  transact(() => {
+    for (const id of editor.selection) {
+      const node = nodes.get(id);
+      if (node) resizeNode(id, key === "width" ? value : node.width, key === "height" ? value : node.height);
+    }
+  }, `${key}:${editor.selection.join()}`);
+}
+
+export function setPageProps(props: Partial<NodeProps>, mergeKey = "") {
+  transact(() => setProps(editor.page, props), mergeKey);
+}
+
+export async function addImages(files: Iterable<File>, at?: Point) {
+  const center = at ?? toWorld(viewport.width / 2, viewport.height / 2);
+  const created: string[] = [];
+  let offset = 0;
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) continue;
+    const asset = await importImage(file);
+    if (!asset) continue;
+    const container = frameAt(editor.page, center.x, center.y);
+    const local = apply(invert(mat(), setWorld(mat(), container ?? undefined)), center.x + offset, center.y + offset);
+    const name = file.name.replace(/\.[^.]+$/, "") || nextName("image");
+    const node = createNode("image", {
+      name,
+      asset: asset.id,
+      width: asset.width,
+      height: asset.height,
+      x: grid(local.x - asset.width / 2),
+      y: grid(local.y - asset.height / 2),
+    });
+    insertNodes([node], container?.id ?? editor.page);
+    created.push(node.id);
+    offset += 24;
+  }
+  if (created.length) select(created);
+}
+
+export function pickImages() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.multiple = true;
+  input.onchange = () => input.files && void addImages(Array.from(input.files));
+  input.click();
 }
 
 export function toggleFlag(id: string, key: "visible" | "locked") {

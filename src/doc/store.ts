@@ -19,6 +19,8 @@ const past: Entry[] = [];
 const future: Entry[] = [];
 const commitListeners = new Set<(ids: Iterable<string>) => void>();
 
+const dirty = new Set<string>();
+let normalizer: ((ids: Set<string>) => void) | null = null;
 let open: Map<string, Snapshot> | null = null;
 let openKey = "";
 let depth = 0;
@@ -41,8 +43,19 @@ export function edit(id: string): SceneNode | undefined {
   const node = nodes.get(id);
   if (open && !open.has(id)) open.set(id, node ? snapshot(node) : null);
   if (node) node.version++;
+  dirty.add(id);
   invalidate();
   return node;
+}
+
+export function setNormalizer(fn: (ids: Set<string>) => void) {
+  normalizer = fn;
+}
+
+export function flushDirty() {
+  if (dirty.size === 0) return;
+  if (normalizer && open) normalizer(dirty);
+  dirty.clear();
 }
 
 export function begin(mergeKey = "") {
@@ -52,7 +65,9 @@ export function begin(mergeKey = "") {
 }
 
 export function end() {
-  if (depth === 0 || --depth > 0 || !open) return;
+  if (depth === 0) return;
+  if (depth === 1) flushDirty();
+  if (--depth > 0 || !open) return;
   const before = open;
   open = null;
   if (before.size === 0) return;
@@ -107,6 +122,7 @@ export function abort() {
   const before = open;
   open = null;
   depth = 0;
+  dirty.clear();
   restore(before);
 }
 

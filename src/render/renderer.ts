@@ -6,13 +6,14 @@ import { invalidate } from "../frame";
 import { createCache } from "./cache";
 import { cssColor, type Rgb } from "./color";
 import { createProgram, type Program } from "./gl";
-import { strokeOutset } from "./raster";
+import { cornerRadius, isPaintable, strokeOutset } from "./raster";
 import { MASK_FRAGMENT, SOLID_FRAGMENT, TEXTURE_FRAGMENT, VERTEX } from "./shaders";
 
 const SETTLE_MS = 120;
 const HANDLE_SIZE = 8;
 const MAX_CLIP_DEPTH = 255;
 const FALLBACK_ACCENT: Rgb = [0.05, 0.6, 1];
+const FALLBACK_GUIDE: Rgb = [1, 0.25, 0.3];
 
 export function createRenderer(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", {
@@ -34,6 +35,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   let mask: Program;
   let active: Program;
   let accent = FALLBACK_ACCENT;
+  let guide = FALLBACK_GUIDE;
   let scale = 1;
   let settled = true;
 
@@ -53,6 +55,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   function readTheme() {
     accent = cssColor("--color-bl", FALLBACK_ACCENT);
+    guide = cssColor("--color-re", FALLBACK_GUIDE);
     invalidate();
   }
 
@@ -98,7 +101,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     use(mask);
     upload(mask, m, 0, 0, node.width, node.height);
     gl!.uniform2f(mask.uniforms.u_size, node.width, node.height);
-    gl!.uniform1f(mask.uniforms.u_radius, Math.max(0, Math.min(node.radius, node.width / 2, node.height / 2)));
+    gl!.uniform1f(mask.uniforms.u_radius, cornerRadius(node));
     gl!.colorMask(false, false, false, false);
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
     gl!.colorMask(true, true, true, true);
@@ -118,7 +121,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       if (!visible && (!hasChildren || node.clip)) continue;
       const opacity = alpha * node.opacity;
       if (opacity <= 0) continue;
-      if (visible && (node.fill || node.stroke) && node.width > 0 && node.height > 0) {
+      if (visible && isPaintable(node) && node.width > 0 && node.height > 0) {
         const tile = cache.resolve(node, m, scale, canvas.width, canvas.height, settled);
         if (tile) {
           use(texture);
@@ -156,7 +159,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
   }
 
-  function line(x0: number, y0: number, x1: number, y1: number, thickness: number) {
+  function line(x0: number, y0: number, x1: number, y1: number, thickness: number, color: Rgb = accent) {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const length = Math.hypot(dx, dy);
@@ -170,7 +173,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     matrix[6] = x0 - ux / 2 + uy / 2;
     matrix[7] = y0 - uy / 2 - ux / 2;
     gl!.uniformMatrix3fv(solid.uniforms.u_matrix, false, matrix);
-    gl!.uniform4f(solid.uniforms.u_color, accent[0], accent[1], accent[2], 1);
+    gl!.uniform4f(solid.uniforms.u_color, color[0], color[1], color[2], 1);
     gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
   }
 
@@ -207,18 +210,27 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     gl!.uniform4f(solid.uniforms.u_rect, 0, 0, 1, 1);
     const thin = Math.max(1, Math.round(viewport.dpr));
     const selection = editor.selection;
+    const view = stack[0];
     if (editor.hover && !editor.selected.has(editor.hover)) outline(editor.hover, thin * 2, false);
     for (const id of selection) outline(id, thin, selection.length === 1);
     if (selection.length > 1) {
       const bounds = unionBounds(selection);
       if (bounds) {
-        const view = stack[0];
         strokeRect(bounds.x * view[0] + view[4], bounds.y * view[3] + view[5], bounds.width * view[0], bounds.height * view[3], thin);
       }
     }
+    for (const item of editor.guides) {
+      line(
+        Math.round(item.x0 * view[0] + view[4]),
+        Math.round(item.y0 * view[3] + view[5]),
+        Math.round(item.x1 * view[0] + view[4]),
+        Math.round(item.y1 * view[3] + view[5]),
+        thin,
+        guide,
+      );
+    }
     const marquee = editor.marquee;
     if (marquee) {
-      const view = stack[0];
       const x = marquee.x * view[0] + view[4];
       const y = marquee.y * view[3] + view[5];
       fillRect(x, y, marquee.width * view[0], marquee.height * view[3], 0.12);

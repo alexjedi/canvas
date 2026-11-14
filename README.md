@@ -9,9 +9,9 @@ pnpm dev
 
 `pnpm build` typechecks and builds to `dist/`.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom.
+Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
 
-The document autosaves to the browser.
+The document and its images autosave to the browser.
 
 ## Todo
 
@@ -24,6 +24,12 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
 - [ ] **Frame tool**: frames as containers, with auto layout (flexbox-style: direction, gap, padding, alignment, hug / fill / fixed)
 - [ ] **Move and scale tools**: select, move, resize, rotate
 - [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
+- [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
+- [ ] **Groups**: bounds follow the children
+- [ ] **Smart guides**: snap to sibling and parent edges and centres, optional pixel grid
+- [ ] **Align and distribute**
+- [ ] **Context menu**
+- [ ] **Page settings**: background colour
 - [ ] **Text tool**
 - [ ] **Design side panel**
   - [ ] Position

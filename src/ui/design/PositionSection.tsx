@@ -6,6 +6,7 @@ import { editor } from "../../editor/state";
 import { NumberField } from "../controls/NumberField";
 import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
+import { AlignRow } from "./AlignRow";
 import { numberOf, useSelected } from "../hooks";
 
 function rotateSelection(rotation: number) {
@@ -19,6 +20,7 @@ export function PositionSection() {
 
   return (
     <Section title="Position">
+      <AlignRow />
       <Row>
         <NumberField label="X" name="X" value={numberOf(x)} onChange={(value) => setSelected("x", value, "x")} />
         <NumberField label="Y" name="Y" value={numberOf(y)} onChange={(value) => setSelected("y", value, "y")} />

@@ -122,7 +122,8 @@ function hitChildren(parent: SceneNode, x: number, y: number, framesOnly: boolea
   for (let i = parent.children.length - 1; i >= 0; i--) {
     const node = nodes.get(parent.children[i]);
     if (!node || !node.visible || node.locked) continue;
-    if (framesOnly && node.kind !== "frame") continue;
+    const isGroup = node.kind === "group";
+    if (framesOnly && node.kind !== "frame" && !isGroup) continue;
     if (exclude?.has(node.id)) continue;
     const dx = x - node.x;
     const dy = y - node.y;
@@ -139,7 +140,11 @@ function hitChildren(parent: SceneNode, x: number, y: number, framesOnly: boolea
       const hit = hitChildren(node, lx, ly, framesOnly, exclude);
       if (hit) return hit;
     }
-    if (inside) return node;
+    if (!inside || isGroup) continue;
+    if (node.kind !== "ellipse") return node;
+    const ex = (lx * 2) / node.width - 1;
+    const ey = (ly * 2) / node.height - 1;
+    if (ex * ex + ey * ey <= 1) return node;
   }
   return null;
 }
@@ -248,4 +253,20 @@ export function rotateAroundCenter(id: string, rotation: number) {
   setLocal(m, node);
   node.x = cx - (m[0] * hw + m[2] * hh);
   node.y = cy - (m[1] * hw + m[3] * hh);
+}
+
+export function nearestFrame(node: SceneNode): string {
+  let parent = nodes.get(node.parent);
+  while (parent && parent.kind === "group") parent = nodes.get(parent.parent);
+  return parent?.id ?? "";
+}
+
+export function translateWorld(id: string, dx: number, dy: number) {
+  const node = nodes.get(id);
+  if (!node || (dx === 0 && dy === 0)) return;
+  const inverse = invert(mat(), setWorld(mat(), nodes.get(node.parent)));
+  const target = edit(id);
+  if (!target) return;
+  target.x += inverse[0] * dx + inverse[2] * dy;
+  target.y += inverse[1] * dx + inverse[3] * dy;
 }

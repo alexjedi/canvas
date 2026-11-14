@@ -9,16 +9,20 @@ import {
   invert,
   isContainer,
   mat,
+  nearestFrame,
   reparent,
-  setLocal,
   setWorld,
   topLevel,
+  unionBounds,
   worldBounds,
   worldRotation,
 } from "../doc/geometry";
+import { applyGroupScale, captureGroup, type ScaleOrigin as GroupOrigin } from "../doc/groups";
 import { abort, begin, edit, end, nodes } from "../doc/store";
 import type { Rect, SceneNode } from "../doc/types";
-import { camera, editor, select, setHover, setMarquee } from "../editor/state";
+import { grid, prefs } from "../editor/prefs";
+import { camera, editor, select, setGuides, setHover, setMarquee } from "../editor/state";
+import { prepareSnap, resetSnap, snapBounds, snapPoint } from "./snap";
 import { moved, type Pointer, type Tool } from "./types";
 
 type Mode = "idle" | "pending" | "move" | "resize" | "marquee";
@@ -67,13 +71,13 @@ function handleCursor(node: SceneNode, handle: Handle): string {
 function resolveTarget(hit: SceneNode, deep: boolean): SceneNode {
   if (deep) return hit;
   const chain = [hit, ...ancestors(hit.id)];
-  if (chain.length === 1) return hit;
+  const top = chain[chain.length - 1];
   for (const id of editor.selection) {
     const parent = nodes.get(id)?.parent;
     const sibling = chain.find((node) => node.parent === parent);
-    if (sibling && sibling !== chain[chain.length - 1]) return sibling;
+    if (sibling && sibling !== top) return sibling;
   }
-  return chain[chain.length - 2];
+  return top.kind === "frame" && chain.length > 1 ? chain[chain.length - 2] : top;
 }
 
 function drillTarget(hit: SceneNode): SceneNode {
@@ -113,11 +117,15 @@ export function createSelectTool(proportional: boolean): Tool {
   let movingSet = new Set<string>();
   let handle: Handle = { hx: 0, hy: 0 };
   let resizeId = "";
-  let initial = mat();
-  let parentInverse = mat();
+  let startBounds: Rect | null = null;
+  const initial = mat();
+  const initialInverse = mat();
+  const parentInverse = mat();
+  let upright = true;
   let startWidth = 0;
   let startHeight = 0;
   let scaleOrigins: ScaleOrigin[] = [];
+  let groupOrigins: GroupOrigin[] = [];
 
   function reset() {
     mode = "idle";
@@ -126,6 +134,9 @@ export function createSelectTool(proportional: boolean): Tool {
     pendingFrame = "";
     origins = [];
     scaleOrigins = [];
+    groupOrigins = [];
+    startBounds = null;
+    resetSnap();
     setMarquee(null);
   }
 
@@ -136,6 +147,7 @@ export function createSelectTool(proportional: boolean): Tool {
       const world = setWorld(mat(), nodes.get(id));
       return { id, wx: world[4], wy: world[5] };
     });
+    startBounds = unionBounds(ids);
     begin();
     mode = "move";
   }
@@ -150,27 +162,37 @@ export function createSelectTool(proportional: boolean): Tool {
     }
     const container = frameAt(editor.page, pointer.x, pointer.y, movingSet);
     const containerId = container?.id ?? editor.page;
+    for (const origin of origins) {
+      const node = nodes.get(origin.id);
+      if (!node || nearestFrame(node) === containerId) continue;
+      if (!container || (node.width <= container.width && node.height <= container.height)) reparent(node.id, containerId);
+    }
+    const first = nodes.get(origins[0]?.id ?? "");
+    if (first && startBounds) {
+      prepareSnap(first.parent, movingSet);
+      const snap = snapBounds({ x: startBounds.x + dx, y: startBounds.y + dy, width: startBounds.width, height: startBounds.height });
+      if (!pointer.shift || dx !== 0) dx += snap.x;
+      if (!pointer.shift || dy !== 0) dy += snap.y;
+    }
     const inverse = mat();
     for (const origin of origins) {
       const node = nodes.get(origin.id);
       if (!node) continue;
-      const fits = !container || (node.width <= container.width && node.height <= container.height);
-      if (node.parent !== containerId && fits) reparent(node.id, containerId);
       invert(inverse, setWorld(inverse, nodes.get(node.parent)));
       const local = apply(inverse, origin.wx + dx, origin.wy + dy);
       const target = edit(node.id);
       if (!target) continue;
-      target.x = Math.round(local.x);
-      target.y = Math.round(local.y);
+      target.x = grid(local.x);
+      target.y = grid(local.y);
     }
   }
 
   function startResize(node: SceneNode, grabbed: Handle) {
     handle = grabbed;
     resizeId = node.id;
-    setLocal(initial, node);
-    const parent = nodes.get(node.parent);
-    invert(parentInverse, setWorld(parentInverse, parent && !isContainer(parent) ? parent : undefined));
+    setWorld(initial, node);
+    invert(initialInverse, initial);
+    upright = Math.abs(initial[1]) < 1e-9 && initial[0] > 0;
     startWidth = node.width;
     startHeight = node.height;
     scaleOrigins = proportional
@@ -184,6 +206,8 @@ export function createSelectTool(proportional: boolean): Tool {
           strokeWidth: item.stroke?.width ?? 0,
         }))
       : [];
+    groupOrigins = !proportional && node.kind === "group" ? captureGroup(node.id) : [];
+    prepareSnap(node.parent, new Set([node.id]));
     begin();
     mode = "resize";
   }
@@ -191,10 +215,13 @@ export function createSelectTool(proportional: boolean): Tool {
   function applyResize(pointer: Pointer) {
     const node = edit(resizeId);
     if (!node) return;
-    const inParent = apply(parentInverse, pointer.x, pointer.y);
-    const local = apply(invert(mat(), initial), inParent.x, inParent.y);
     const { hx, hy } = handle;
     const centered = pointer.alt;
+    const locked = pointer.shift || proportional;
+    let target = { x: pointer.x, y: pointer.y };
+    if (upright && !locked) target = snapPoint(pointer.x, pointer.y, hx !== 0, hy !== 0);
+    else setGuides([]);
+    const local = apply(initialInverse, target.x, target.y);
     let left = 0, top = 0, right = startWidth, bottom = startHeight;
     if (hx < 0) left = local.x;
     if (hx > 0) right = local.x;
@@ -206,7 +233,7 @@ export function createSelectTool(proportional: boolean): Tool {
       if (hy < 0) bottom = startHeight - top;
       if (hy > 0) top = startHeight - bottom;
     }
-    if ((pointer.shift || proportional) && startWidth > 0 && startHeight > 0) {
+    if (locked && startWidth > 0 && startHeight > 0) {
       const ratio = startWidth / startHeight;
       let width = right - left;
       let height = bottom - top;
@@ -226,7 +253,7 @@ export function createSelectTool(proportional: boolean): Tool {
     }
     if (left > right) [left, right] = [right, left];
     if (top > bottom) [top, bottom] = [bottom, top];
-    const snap = node.rotation === 0 && !proportional;
+    const snap = upright && !proportional && prefs.pixelGrid;
     if (snap) {
       left = Math.round(initial[4] + left) - initial[4];
       right = Math.round(initial[4] + right) - initial[4];
@@ -236,24 +263,27 @@ export function createSelectTool(proportional: boolean): Tool {
     const minimum = snap ? 1 : 0.01;
     const width = Math.max(minimum, right - left);
     const height = Math.max(minimum, bottom - top);
-    const origin = apply(initial, left, top);
+    const corner = apply(initial, left, top);
+    invert(parentInverse, setWorld(parentInverse, nodes.get(node.parent)));
+    const origin = apply(parentInverse, corner.x, corner.y);
     node.x = origin.x;
     node.y = origin.y;
     node.width = width;
     node.height = height;
+    if (groupOrigins.length > 0 && startWidth > 0 && startHeight > 0) applyGroupScale(groupOrigins, width / startWidth, height / startHeight);
     if (!proportional || startWidth === 0) return;
     const factor = width / startWidth;
     for (const item of scaleOrigins) {
-      const target = item.id === resizeId ? node : edit(item.id);
-      if (!target) continue;
+      const scaled = item.id === resizeId ? node : edit(item.id);
+      if (!scaled) continue;
       if (item.id !== resizeId) {
-        target.x = item.x * factor;
-        target.y = item.y * factor;
-        target.width = item.width * factor;
-        target.height = item.height * factor;
+        scaled.x = item.x * factor;
+        scaled.y = item.y * factor;
+        scaled.width = item.width * factor;
+        scaled.height = item.height * factor;
       }
-      target.radius = item.radius * factor;
-      if (target.stroke && item.strokeWidth > 0) target.stroke = { ...target.stroke, width: item.strokeWidth * factor };
+      scaled.radius = item.radius * factor;
+      if (scaled.stroke && item.strokeWidth > 0) scaled.stroke = { ...scaled.stroke, width: item.strokeWidth * factor };
     }
   }
 

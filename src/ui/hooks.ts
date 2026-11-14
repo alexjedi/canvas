@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { nodes } from "../doc/store";
-import type { NodeProps, Paint, Stroke } from "../doc/types";
+import type { NodeProps, Paint, SceneNode, Stroke } from "../doc/types";
 import { editor } from "../editor/state";
 import { subscribe } from "../frame";
 
@@ -32,6 +32,15 @@ export function useSelected<K extends keyof NodeProps>(key: K): NodeProps[K] | M
     }
     return value;
   });
+}
+
+export function useSelectionEvery(test: (node: SceneNode) => boolean): boolean {
+  return useFrame(() =>
+    editor.selection.every((id) => {
+      const node = nodes.get(id);
+      return !!node && test(node);
+    }),
+  );
 }
 
 export const numberOf = (value: number | Mixed | undefined): number | null => (typeof value === "number" ? value : null);

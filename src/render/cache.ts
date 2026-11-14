@@ -1,3 +1,4 @@
+import { getBitmap } from "../doc/assets";
 import type { Mat } from "../doc/geometry";
 import type { Paint, SceneNode, Stroke } from "../doc/types";
 import { rasterize, strokeOutset } from "./raster";
@@ -17,6 +18,9 @@ export interface Tile {
   radius: number;
   fill: Paint | null;
   stroke: Stroke | null;
+  kind: SceneNode["kind"];
+  fit: SceneNode["fit"];
+  bitmap: ImageBitmap | undefined;
 }
 
 const FULL_LIMIT = 2048;
@@ -66,7 +70,9 @@ export function createCache(gl: WebGL2RenderingContext) {
       tile.nodeHeight === node.height &&
       tile.radius === node.radius &&
       tile.fill === node.fill &&
-      tile.stroke === node.stroke
+      tile.stroke === node.stroke &&
+      tile.kind === node.kind &&
+      (node.kind !== "image" || (tile.fit === node.fit && tile.bitmap === getBitmap(node.asset)))
     );
   }
 
@@ -132,6 +138,9 @@ export function createCache(gl: WebGL2RenderingContext) {
     tile.radius = node.radius;
     tile.fill = node.fill;
     tile.stroke = node.stroke;
+    tile.kind = node.kind;
+    tile.fit = node.fit;
+    tile.bitmap = node.kind === "image" ? getBitmap(node.asset) : undefined;
     tiles.set(node.id, tile);
     return tile;
   }

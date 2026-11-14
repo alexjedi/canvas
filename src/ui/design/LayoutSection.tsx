@@ -1,5 +1,5 @@
 import { nodes } from "../../doc/store";
-import { setSelected } from "../../editor/actions";
+import { resizeSelected, setSelected } from "../../editor/actions";
 import { editor } from "../../editor/state";
 import { NumberField } from "../controls/NumberField";
 import { Row } from "../controls/Row";
@@ -16,8 +16,8 @@ export function LayoutSection() {
   return (
     <Section title="Layout">
       <Row>
-        <NumberField label="W" name="Width" min={1} value={numberOf(width)} onChange={(value) => setSelected("width", value, "width")} />
-        <NumberField label="H" name="Height" min={1} value={numberOf(height)} onChange={(value) => setSelected("height", value, "height")} />
+        <NumberField label="W" name="Width" min={1} value={numberOf(width)} onChange={(value) => resizeSelected("width", value)} />
+        <NumberField label="H" name="Height" min={1} value={numberOf(height)} onChange={(value) => resizeSelected("height", value)} />
       </Row>
       {framesOnly && <Switch label="Clip content" checked={clip !== MIXED && !!clip} onChange={(value) => setSelected("clip", value)} />}
     </Section>

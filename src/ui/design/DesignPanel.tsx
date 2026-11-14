@@ -1,25 +1,36 @@
 import { editor } from "../../editor/state";
-import { useFrame } from "../hooks";
+import type { SceneNode } from "../../doc/types";
+import { useFrame, useSelectionEvery } from "../hooks";
 import { AppearanceSection } from "./AppearanceSection";
+import { ExportSection } from "./ExportSection";
 import { FillSection } from "./FillSection";
+import { ImageSection } from "./ImageSection";
 import { LayoutSection } from "./LayoutSection";
+import { PageSection } from "./PageSection";
 import { PositionSection } from "./PositionSection";
 import { StrokeSection } from "./StrokeSection";
 
+const isPaintable = (node: SceneNode) => node.kind !== "group";
+const isImage = (node: SceneNode) => node.kind === "image";
+
 export function DesignPanel() {
   const count = useFrame(() => editor.selection.length);
+  const paintable = useSelectionEvery(isPaintable);
+  const images = useSelectionEvery(isImage);
 
   return (
     <aside className="flex w-[248px] shrink-0 flex-col overflow-y-auto rounded-2xl bg-panel pb-4 [scrollbar-color:var(--color-field-3)_transparent] [scrollbar-width:thin]">
       {count === 0 ? (
-        <p className="px-4 pt-4 text-tx-4">Select a layer to edit it</p>
+        <PageSection />
       ) : (
         <>
           <PositionSection />
           <LayoutSection />
           <AppearanceSection />
-          <FillSection />
-          <StrokeSection />
+          {images && <ImageSection />}
+          {paintable && <FillSection />}
+          {paintable && <StrokeSection />}
+          <ExportSection />
         </>
       )}
     </aside>

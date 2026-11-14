@@ -3,7 +3,14 @@ import { nodes } from "../doc/store";
 import { ROOT, type Rect } from "../doc/types";
 import { invalidate } from "../frame";
 
-export type ToolId = "move" | "scale" | "frame" | "rect" | "hand";
+export type ToolId = "move" | "scale" | "frame" | "rect" | "ellipse" | "hand";
+
+export interface Guide {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
 export type DropPosition = "above" | "below" | "inside";
 
 export interface Camera {
@@ -13,6 +20,7 @@ export interface Camera {
 }
 
 const EMPTY: readonly string[] = Object.freeze([]);
+const NO_GUIDES: readonly Guide[] = Object.freeze([]);
 
 export const MIN_ZOOM = 0.02;
 export const MAX_ZOOM = 256;
@@ -27,6 +35,7 @@ export const editor = {
   selected: new Set<string>(),
   hover: "",
   marquee: null as Rect | null,
+  guides: NO_GUIDES,
   expanded: new Set<string>(),
   drop: null as { id: string; position: DropPosition } | null,
 };
@@ -56,6 +65,12 @@ export function setTool(tool: ToolId) {
 
 export function setMarquee(rect: Rect | null) {
   editor.marquee = rect;
+  invalidate();
+}
+
+export function setGuides(guides: readonly Guide[]) {
+  if (guides.length === 0 && editor.guides.length === 0) return;
+  editor.guides = guides.length ? guides : NO_GUIDES;
   invalidate();
 }
 
