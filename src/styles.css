@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import "./palette.css";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Lilex";
+  src: url("/fonts/Lilex.woff2") format("woff2-variations");
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+:root {
+  --color-field: color-mix(in oklch, var(--color-tx) 5%, transparent);
+  --color-field-2: color-mix(in oklch, var(--color-tx) 9%, transparent);
+  --color-field-3: color-mix(in oklch, var(--color-tx) 14%, transparent);
+  --color-panel: var(--color-bg-2);
+  --color-stage: var(--color-bg);
+  --shadow-pop: 0 12px 32px -8px color-mix(in oklch, black 28%, transparent),
+    0 2px 6px color-mix(in oklch, black 10%, transparent);
+}
+
+.dark {
+  --color-stage: oklch(0.12 0.005 80);
+  --color-panel: var(--color-bg);
+  --shadow-pop: 0 16px 40px -8px color-mix(in oklch, black 60%, transparent),
+    0 0 0 1px color-mix(in oklch, white 6%, transparent);
+}
+
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Lilex", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-bg: var(--color-bg);
+  --color-bg-2: var(--color-bg-2);
+  --color-ui: var(--color-ui);
+  --color-ui-2: var(--color-ui-2);
+  --color-ui-3: var(--color-ui-3);
+  --color-tx: var(--color-tx);
+  --color-tx-2: var(--color-tx-2);
+  --color-tx-3: var(--color-tx-3);
+  --color-tx-4: var(--color-tx-4);
+  --color-re: var(--color-re);
+  --color-or: var(--color-or);
+  --color-ye: var(--color-ye);
+  --color-gr: var(--color-gr);
+  --color-cy: var(--color-cy);
+  --color-bl: var(--color-bl);
+  --color-pu: var(--color-pu);
+  --color-ma: var(--color-ma);
+  --color-field: var(--color-field);
+  --color-field-2: var(--color-field-2);
+  --color-field-3: var(--color-field-3);
+  --color-panel: var(--color-panel);
+  --color-stage: var(--color-stage);
+  --shadow-pop: var(--shadow-pop);
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid color-mix(in oklch, var(--color-bl) 70%, transparent);
+    outline-offset: 1px;
+  }
+}
