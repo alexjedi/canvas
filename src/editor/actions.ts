@@ -2,6 +2,7 @@ import { importImage } from "../doc/assets";
 import { addPage, cloneNodes, collectSubtree, createNode, nextName } from "../doc/create";
 import { apply, frameAt, invert, isContainer, mat, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
 import { resizeNode } from "../doc/groups";
+import { inferLayout, isLayout } from "../doc/layout";
 import { canRedo, canUndo, edit, insertNodes, moveNode, nodes, redo, removeNode, setProps, transact, undo } from "../doc/store";
 import { ROOT, type NodeProps, type Point, type SceneNode } from "../doc/types";
 import { grid } from "./prefs";
@@ -255,6 +256,43 @@ export function ungroupSelection() {
     }
   });
   if (released.length) select(released);
+}
+
+export function addAutoLayout() {
+  const ids = roots();
+  const first = nodes.get(ids[0] ?? "");
+  if (!first) return;
+  transact(() => {
+    let target = first;
+    if (ids.length > 1 || first.kind !== "frame") {
+      const top = nodes.get(ids[ids.length - 1]);
+      const parent = nodes.get(top?.parent ?? "");
+      const bounds = unionBounds(ids);
+      if (!top || !parent || !bounds) return;
+      const origin = apply(invert(mat(), setWorld(mat(), parent)), bounds.x, bounds.y);
+      target = createNode("frame", {
+        name: nextName("frame"),
+        x: origin.x,
+        y: origin.y,
+        width: bounds.width,
+        height: bounds.height,
+        fill: null,
+        clip: false,
+      });
+      insertNodes([target], parent.id, parent.children.indexOf(top.id) + 1);
+      for (const id of ids) reparent(id, target.id);
+    } else if (isLayout(first)) {
+      return;
+    }
+    setProps(target.id, inferLayout(target));
+    select([target.id]);
+  });
+}
+
+export function removeAutoLayout() {
+  transact(() => {
+    for (const id of editor.selection) if (isLayout(nodes.get(id))) setProps(id, { layout: "none", sizeX: "fixed", sizeY: "fixed" });
+  });
 }
 
 export function toggleSelected(key: "visible" | "locked") {

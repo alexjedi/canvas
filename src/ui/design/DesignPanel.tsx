@@ -2,6 +2,7 @@ import { editor } from "../../editor/state";
 import type { SceneNode } from "../../doc/types";
 import { useFrame, useSelectionEvery } from "../hooks";
 import { AppearanceSection } from "./AppearanceSection";
+import { AutoLayoutSection } from "./AutoLayoutSection";
 import { ExportSection } from "./ExportSection";
 import { FillSection } from "./FillSection";
 import { ImageSection } from "./ImageSection";
@@ -26,6 +27,7 @@ export function DesignPanel() {
         <>
           <PositionSection />
           <LayoutSection />
+          <AutoLayoutSection />
           <AppearanceSection />
           {images && <ImageSection />}
           {paintable && <FillSection />}

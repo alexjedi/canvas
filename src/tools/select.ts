@@ -18,6 +18,7 @@ import {
   worldRotation,
 } from "../doc/geometry";
 import { applyGroupScale, captureGroup, type ScaleOrigin as GroupOrigin } from "../doc/groups";
+import { isLayout, placeInLayout } from "../doc/layout";
 import { abort, begin, edit, end, nodes } from "../doc/store";
 import type { Rect, SceneNode } from "../doc/types";
 import { grid, prefs } from "../editor/prefs";
@@ -46,6 +47,8 @@ interface ScaleOrigin {
   height: number;
   radius: number;
   strokeWidth: number;
+  gap: number;
+  padding: [number, number, number, number];
 }
 
 const HANDLE_REACH = 6;
@@ -165,10 +168,12 @@ export function createSelectTool(proportional: boolean): Tool {
     for (const origin of origins) {
       const node = nodes.get(origin.id);
       if (!node || nearestFrame(node) === containerId) continue;
-      if (!container || (node.width <= container.width && node.height <= container.height)) reparent(node.id, containerId);
+      if (!container || isLayout(container) || (node.width <= container.width && node.height <= container.height)) reparent(node.id, containerId);
     }
     const first = nodes.get(origins[0]?.id ?? "");
-    if (first && startBounds) {
+    const flowing = isLayout(nodes.get(first?.parent ?? ""));
+    if (flowing) setGuides([]);
+    if (first && startBounds && !flowing) {
       prepareSnap(first.parent, movingSet);
       const snap = snapBounds({ x: startBounds.x + dx, y: startBounds.y + dy, width: startBounds.width, height: startBounds.height });
       if (!pointer.shift || dx !== 0) dx += snap.x;
@@ -178,7 +183,13 @@ export function createSelectTool(proportional: boolean): Tool {
     for (const origin of origins) {
       const node = nodes.get(origin.id);
       if (!node) continue;
-      invert(inverse, setWorld(inverse, nodes.get(node.parent)));
+      const parent = nodes.get(node.parent);
+      invert(inverse, setWorld(inverse, parent));
+      if (parent && isLayout(parent)) {
+        const at = apply(inverse, pointer.x, pointer.y);
+        placeInLayout(node, parent, at.x, at.y, movingSet);
+        continue;
+      }
       const local = apply(inverse, origin.wx + dx, origin.wy + dy);
       const target = edit(node.id);
       if (!target) continue;
@@ -204,6 +215,8 @@ export function createSelectTool(proportional: boolean): Tool {
           height: item.height,
           radius: item.radius,
           strokeWidth: item.stroke?.width ?? 0,
+          gap: item.gap,
+          padding: [item.paddingTop, item.paddingRight, item.paddingBottom, item.paddingLeft],
         }))
       : [];
     groupOrigins = !proportional && node.kind === "group" ? captureGroup(node.id) : [];
@@ -270,6 +283,8 @@ export function createSelectTool(proportional: boolean): Tool {
     node.y = origin.y;
     node.width = width;
     node.height = height;
+    if (hx !== 0 || locked) node.sizeX = "fixed";
+    if (hy !== 0 || locked) node.sizeY = "fixed";
     if (groupOrigins.length > 0 && startWidth > 0 && startHeight > 0) applyGroupScale(groupOrigins, width / startWidth, height / startHeight);
     if (!proportional || startWidth === 0) return;
     const factor = width / startWidth;
@@ -283,6 +298,11 @@ export function createSelectTool(proportional: boolean): Tool {
         scaled.height = item.height * factor;
       }
       scaled.radius = item.radius * factor;
+      scaled.gap = item.gap * factor;
+      scaled.paddingTop = item.padding[0] * factor;
+      scaled.paddingRight = item.padding[1] * factor;
+      scaled.paddingBottom = item.padding[2] * factor;
+      scaled.paddingLeft = item.padding[3] * factor;
       if (scaled.stroke && item.strokeWidth > 0) scaled.stroke = { ...scaled.stroke, width: item.strokeWidth * factor };
     }
   }

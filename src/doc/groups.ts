@@ -1,4 +1,5 @@
 import { mat, setLocal } from "./geometry";
+import { isLayout, layoutFrame } from "./layout";
 import { edit, nodes, removeNode, setNormalizer } from "./store";
 import type { SceneNode } from "./types";
 
@@ -64,14 +65,18 @@ function normalize(dirty: Set<string>) {
     const ids = [...dirty];
     dirty.clear();
     const groups = new Set<SceneNode>();
+    const frames = new Set<SceneNode>();
     for (const id of ids) {
       const node = nodes.get(id);
       if (!node) continue;
-      if (node.kind === "group") groups.add(node);
       const parent = nodes.get(node.parent);
+      if (node.kind === "group") groups.add(node);
       if (parent?.kind === "group") groups.add(parent);
+      if (isLayout(node)) frames.add(node);
+      if (parent && isLayout(parent)) frames.add(parent);
     }
     for (const group of groups) if (nodes.has(group.id)) refit(group);
+    for (const frame of frames) if (nodes.has(frame.id)) layoutFrame(frame);
   }
 }
 
@@ -113,6 +118,8 @@ export function resizeNode(id: string, width: number, height: number) {
   }
   const target = edit(id);
   if (!target) return;
+  if (width !== target.width) target.sizeX = "fixed";
+  if (height !== target.height) target.sizeY = "fixed";
   target.width = width;
   target.height = height;
 }

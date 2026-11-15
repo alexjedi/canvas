@@ -9,7 +9,7 @@ pnpm dev
 
 `pnpm build` typechecks and builds to `dist/`.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
+Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
 
 The document and its images autosave to the browser.
 

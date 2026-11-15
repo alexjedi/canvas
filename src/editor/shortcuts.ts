@@ -1,4 +1,5 @@
 import {
+  addAutoLayout,
   addImages,
   copySelection,
   deleteSelection,
@@ -48,6 +49,7 @@ function onKeyDown(event: KeyboardEvent) {
   else if (mod && key === "-") zoomBy(0.5);
   else if (mod && key === "0") zoomAt(viewport.width / 2, viewport.height / 2, 1);
   else if (mod) handled = false;
+  else if (key === "a" && event.shiftKey) addAutoLayout();
   else if (key === "]") reorder("front");
   else if (key === "[") reorder("back");
   else if (event.code === "Digit1" && event.shiftKey) zoomToFit();

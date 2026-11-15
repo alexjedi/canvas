@@ -29,6 +29,16 @@ const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
   clip: false,
   asset: "",
   fit: "cover",
+  layout: "none",
+  gap: 0,
+  paddingTop: 0,
+  paddingRight: 0,
+  paddingBottom: 0,
+  paddingLeft: 0,
+  alignMain: "start",
+  alignCross: "start",
+  sizeX: "fixed",
+  sizeY: "fixed",
   version: 0,
 };
 

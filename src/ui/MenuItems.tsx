@@ -1,5 +1,6 @@
 import { nodes } from "../doc/store";
 import {
+  addAutoLayout,
   copyToSystem,
   deleteSelection,
   duplicateSelection,
@@ -29,6 +30,7 @@ export function MenuItems() {
       <MenuSeparator />
       <MenuItem label="Group" hint="⌘G" disabled={empty} onSelect={groupSelection} />
       <MenuItem label="Ungroup" hint="⇧⌘G" disabled={!container} onSelect={ungroupSelection} />
+      <MenuItem label="Add auto layout" hint="⇧A" disabled={empty} onSelect={addAutoLayout} />
       <MenuSeparator />
       <MenuItem label="Bring to front" hint="]" disabled={empty} onSelect={() => reorder("front")} />
       <MenuItem label="Send to back" hint="[" disabled={empty} onSelect={() => reorder("back")} />
