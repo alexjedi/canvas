@@ -71,7 +71,7 @@ function span(lines: Line[], value: number, min: number, max: number): [number, 
   return found ? [min, max] : null;
 }
 
-function showGuides(xs: number[], ys: number[], bounds: Rect) {
+export function showGuides(xs: number[], ys: number[], bounds: Rect) {
   const guides: Guide[] = [];
   for (const x of xs) {
     const range = span(vertical, x, bounds.y, bounds.y + bounds.height);
@@ -82,6 +82,10 @@ function showGuides(xs: number[], ys: number[], bounds: Rect) {
     if (range) guides.push({ x0: range[0], y0: y, x1: range[1], y1: y });
   }
   setGuides(guides);
+}
+
+export function snapOffsets(x: number | null, y: number | null): Point {
+  return { x: x === null ? 0 : nearest(vertical, [x]), y: y === null ? 0 : nearest(horizontal, [y]) };
 }
 
 export function snapBounds(bounds: Rect): Point {

@@ -2,6 +2,7 @@ import { nodes } from "../doc/store";
 import {
   addAutoLayout,
   copyToSystem,
+  cutToSystem,
   deleteSelection,
   duplicateSelection,
   groupSelection,
@@ -24,6 +25,7 @@ export function MenuItems() {
   return (
     <>
       <MenuItem label="Copy" hint="⌘C" disabled={empty} onSelect={copyToSystem} />
+      <MenuItem label="Cut" hint="⌘X" disabled={empty} onSelect={cutToSystem} />
       <MenuItem label="Copy as SVG" disabled={empty} onSelect={copyAsSvg} />
       <MenuItem label="Paste" hint="⌘V" onSelect={pasteFromSystem} />
       <MenuItem label="Duplicate" hint="⌘D" disabled={empty} onSelect={duplicateSelection} />

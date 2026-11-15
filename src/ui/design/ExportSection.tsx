@@ -1,5 +1,7 @@
-import { Download } from "lucide-react";
+import { Download, Smartphone } from "lucide-react";
 import { useState } from "react";
+import { nodes } from "../../doc/store";
+import { openInReel } from "../../editor/actions";
 import { editor } from "../../editor/state";
 import { exportNodes, type ExportFormat } from "../../render/export";
 import { Button } from "../controls/Button";
@@ -21,6 +23,7 @@ export function ExportSection() {
   const [scale, setScale] = useState("1");
   const [busy, setBusy] = useState(false);
   const count = useFrame(() => editor.selection.length);
+  const framed = useFrame(() => editor.selection.length === 1 && nodes.get(editor.selection[0])?.kind === "frame");
 
   async function run() {
     setBusy(true);
@@ -38,6 +41,12 @@ export function ExportSection() {
         <Download size={14} />
         {count > 1 ? `Export ${count} layers` : "Export"}
       </Button>
+      {framed && (
+        <Button title="Copies the frame as an image and opens Reel. Paste it there with ⌘V." onClick={openInReel}>
+          <Smartphone size={14} />
+          Open in Reel
+        </Button>
+      )}
     </Section>
   );
 }

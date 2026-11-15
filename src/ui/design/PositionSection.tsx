@@ -9,6 +9,7 @@ import { NumberField } from "../controls/NumberField";
 import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
 import { AlignRow } from "./AlignRow";
+import { GridRow } from "./GridRow";
 import { Switch } from "../controls/Switch";
 import { numberOf, useSelected, useSelectionEvery } from "../hooks";
 
@@ -28,6 +29,7 @@ export function PositionSection() {
   return (
     <Section title="Position">
       <AlignRow />
+      <GridRow />
       <Row>
         <NumberField label="X" name="X" value={numberOf(x)} onChange={(value) => setSelected("x", value, "x")} />
         <NumberField label="Y" name="Y" value={numberOf(y)} onChange={(value) => setSelected("y", value, "y")} />

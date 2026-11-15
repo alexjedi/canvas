@@ -6,11 +6,13 @@ import { AppearanceSection } from "./AppearanceSection";
 import { AutoLayoutSection } from "./AutoLayoutSection";
 import { ExportSection } from "./ExportSection";
 import { FillSection } from "./FillSection";
+import { FrameSection } from "./FrameSection";
 import { ImageSection } from "./ImageSection";
 import { LayoutSection } from "./LayoutSection";
 import { PageSection } from "./PageSection";
 import { PointSection } from "./PointSection";
 import { PositionSection } from "./PositionSection";
+import { ScaleSection } from "./ScaleSection";
 import { StrokeSection } from "./StrokeSection";
 import { TextSection } from "./TextSection";
 
@@ -20,6 +22,7 @@ const isText = (node: SceneNode) => node.kind === "text";
 
 export function DesignPanel() {
   const count = useFrame(() => editor.selection.length);
+  const tool = useFrame(() => editor.tool);
   const paintable = useSelectionEvery(isPaintable);
   const images = useSelectionEvery(isImage);
   const texts = useSelectionEvery(isText);
@@ -27,10 +30,13 @@ export function DesignPanel() {
 
   return (
     <aside className="flex w-[248px] shrink-0 flex-col overflow-y-auto rounded-2xl bg-panel pb-4 [scrollbar-color:var(--color-field-3)_transparent] [scrollbar-width:thin]">
-      {count === 0 ? (
+      {tool === "frame" ? (
+        <FrameSection />
+      ) : count === 0 ? (
         <PageSection />
       ) : (
         <>
+          {tool === "scale" && <ScaleSection />}
           {points && <PointSection />}
           <PositionSection />
           <LayoutSection />

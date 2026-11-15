@@ -1,7 +1,7 @@
 import { createNode, nextName } from "../doc/create";
 import { apply, frameAt, invert, mat, setWorld, type Mat } from "../doc/geometry";
 import { abort, begin, edit, end, insertNodes } from "../doc/store";
-import type { NodeKind } from "../doc/types";
+import type { NodeKind, SceneNode } from "../doc/types";
 import { grid } from "../editor/prefs";
 import { editor, select, setTool } from "../editor/state";
 import { prepareSnap, resetSnap, snapPoint } from "./snap";
@@ -15,6 +15,7 @@ export function createShapeTool(kind: NodeKind): Tool {
   let toLocal: Mat = mat();
   let dragged = false;
   let origin = { x: 0, y: 0 };
+  let container: SceneNode | null = null;
 
   function finish() {
     resetSnap();
@@ -28,6 +29,7 @@ export function createShapeTool(kind: NodeKind): Tool {
     cursor: "crosshair",
     down(pointer) {
       const parent = frameAt(editor.page, pointer.x, pointer.y);
+      container = parent?.kind === "frame" ? parent : null;
       toLocal = invert(mat(), setWorld(mat(), parent ?? undefined));
       prepareSnap(parent?.id ?? editor.page, new Set());
       const snapped = snapPoint(pointer.x, pointer.y, true, true);
@@ -65,8 +67,8 @@ export function createShapeTool(kind: NodeKind): Tool {
       if (!dragged) {
         const node = edit(id);
         if (node) {
-          node.width = DEFAULT_SIZE;
-          node.height = DEFAULT_SIZE;
+          node.width = container ? Math.max(1, grid(container.width / 2)) : DEFAULT_SIZE;
+          node.height = container ? Math.max(1, grid(container.height / 2)) : DEFAULT_SIZE;
         }
       }
       end();

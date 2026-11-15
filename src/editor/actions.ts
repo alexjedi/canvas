@@ -1,10 +1,13 @@
 import { importImage } from "../doc/assets";
+import { spaceGrid, tidyGrid } from "../doc/grid";
+import { applyStyles, captureStyles } from "../doc/scale";
 import { extractSvg, importSvg } from "../doc/svg";
 import { layoutText, spliceRuns, styleRange } from "../doc/text";
-import { svgMarkup } from "../render/export";
+import { renderPng, svgMarkup } from "../render/export";
+import { reelQuery } from "./presets";
 import { addPage, cloneNodes, collectSubtree, createNode, nextName } from "../doc/create";
 import { commitVector, isSmooth, locatePoint, pixelPaths, removePoints, shapePaths, STRIDE, toggleSmooth } from "../doc/vector";
-import { apply, frameAt, invert, isContainer, mat, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
+import { apply, frameAt, invert, isContainer, mat, placeCentre, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
 import { resizeNode } from "../doc/groups";
 import { inferLayout, isLayout } from "../doc/layout";
 import { canRedo, canUndo, edit, insertNodes, moveNode, nodes, redo, removeNode, setProps, transact, undo } from "../doc/store";
@@ -14,6 +17,8 @@ import { camera, editor, rangeOf, sanitize, select, setCamera, setEditing, setPa
 
 const FIT_PADDING = 64;
 const DUPLICATE_GAP = 100;
+const REEL_URL = "https://reel.alexvoid.com/";
+const REEL_SCALE = 2;
 
 let clipboard: SceneNode[][] = [];
 let copiedText = "";
@@ -131,6 +136,86 @@ export function deleteSelection() {
 
 function snapshotTree(id: string): SceneNode[] {
   return collectSubtree(id).map((node) => ({ ...node, children: node.children.slice() }));
+}
+
+export function cloneInPlace(ids: readonly string[]): string[] {
+  const created: string[] = [];
+  for (const id of ids) {
+    const source = nodes.get(id);
+    const parent = nodes.get(source?.parent ?? "");
+    if (!source || !parent) continue;
+    const copy = cloneNodes(snapshotTree(id));
+    insertNodes(copy, parent.id, parent.children.indexOf(id) + 1);
+    created.push(copy[0].id);
+  }
+  return created;
+}
+
+export function cutSelection(): string {
+  const text = copySelection();
+  if (!text) return "";
+  const ids = roots();
+  transact(() => ids.forEach(removeNode));
+  select([]);
+  return text;
+}
+
+export function cutToSystem() {
+  const text = cutSelection();
+  if (text) navigator.clipboard?.writeText(text).catch(() => {});
+}
+
+export function createFrame(name: string, width: number, height: number) {
+  const centre = toWorld(viewport.width / 2, viewport.height / 2);
+  const frame = createNode("frame", { name, x: grid(centre.x - width / 2), y: grid(centre.y - height / 2), width, height });
+  insertNodes([frame], editor.page);
+  setTool("move");
+  select([frame.id]);
+}
+
+export function scaleSelection(factor: number) {
+  const ids = roots().filter((id) => !nodes.get(id)?.locked);
+  const bounds = unionBounds(ids);
+  if (!bounds || !(factor > 0) || factor === 1) return;
+  const pivotX = bounds.x + bounds.width / 2;
+  const pivotY = bounds.y + bounds.height / 2;
+  transact(() => {
+    for (const id of ids) {
+      const source = nodes.get(id);
+      if (!source) continue;
+      const centre = apply(setWorld(mat(), source), source.width / 2, source.height / 2);
+      const origins = captureStyles(id);
+      const node = edit(id);
+      if (!node) continue;
+      node.width = source.width * factor;
+      node.height = source.height * factor;
+      node.sizeX = "fixed";
+      node.sizeY = "fixed";
+      applyStyles(origins, node, factor);
+      placeCentre(node, pivotX + (centre.x - pivotX) * factor, pivotY + (centre.y - pivotY) * factor);
+    }
+  }, `scale:${ids.join()}`);
+}
+
+export function tidySelection() {
+  const ids = roots();
+  if (ids.length > 1) transact(() => tidyGrid(ids));
+}
+
+export function spaceSelection(horizontal: boolean, gap: number) {
+  const ids = roots();
+  if (ids.length > 1) transact(() => spaceGrid(ids, horizontal, gap), `gap${horizontal ? "x" : "y"}:${ids.join()}`);
+}
+
+export function openInReel() {
+  const node = nodes.get(editor.selection[0] ?? "");
+  if (!node || !navigator.clipboard || typeof ClipboardItem === "undefined") return;
+  const query = reelQuery(node.width, node.height);
+  const image = renderPng(node.id, REEL_SCALE).then((blob) => blob ?? Promise.reject(new Error("render")));
+  navigator.clipboard
+    .write([new ClipboardItem({ "image/png": image })])
+    .then(() => window.open(query ? `${REEL_URL}?${query}` : REEL_URL, "_blank", "noopener"))
+    .catch(() => {});
 }
 
 export function duplicateSelection() {

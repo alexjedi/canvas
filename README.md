@@ -9,7 +9,7 @@ pnpm dev
 
 `pnpm build` typechecks and builds to `dist/`.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · double-click a group or frame to go one level deeper · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Drag just outside a corner to rotate (`⇧` snaps to 15°). While editing points: click a line to add a point, drag a line to bend it, `⌥`-click a point to toggle corner/smooth, `⌥`-drag to pull out handles. While editing text: `⌘B` bold on the selected range. Images, SVG markup and plain text can be pasted; images and SVG files can be dropped onto the canvas. Right-click for Copy as SVG.
+Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · double-click a group or frame to go one level deeper · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘X` / `⌘V` copy/cut/paste · `⌥`-drag copy (`⇧` locks the axis) · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Drag just outside a corner to rotate (`⇧` snaps to 15°). While editing points: click a line to add a point, drag a line to bend it, `⌥`-click a point to toggle corner/smooth, `⌥`-drag to pull out handles. While editing text: `⌘B` bold on the selected range. Images, SVG markup and plain text can be pasted; images and SVG files can be dropped onto the canvas. Right-click for Copy as SVG.
 
 The document and its images autosave to the browser.
 
@@ -41,7 +41,7 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
 
 ### Up next
 
-Written but waiting on a visual check: everything above except the bezel preview, plus everything below. Still unwritten: the bezel preview.
+Written but waiting on a visual check: everything above and below. The bezel preview is a hand-off to Reel rather than an in-app mockup.
 
 - [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
 - [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
@@ -86,6 +86,10 @@ Written but waiting on a visual check: everything above except the bezel preview
 - [ ] **Clipboard**: paste SVG as editable layers, paste text as a text layer, copy as SVG
 - [ ] **Stroke caps and joins** on vectors; point panel in vector edit mode
 - [ ] **Confirmation before deleting a page**
+- [ ] **Frame presets** in the right panel while the Frame tool is active; a click inside a frame makes a shape half its size
+- [ ] **Scale panel** while the Scale tool is active: exact factor, proportional width and height
+- [ ] **Tidy up** and gap fields for a grid of selected layers
+- [ ] **Open in Reel**: copies the frame as an image and opens Reel with the matching device
 
 ### Look and feel
 

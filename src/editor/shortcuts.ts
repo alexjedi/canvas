@@ -2,6 +2,7 @@ import {
   addAutoLayout,
   addFiles,
   copySelection,
+  cutSelection,
   deleteSelection,
   duplicateSelection,
   groupSelection,
@@ -74,6 +75,14 @@ function onCopy(event: ClipboardEvent) {
   event.preventDefault();
 }
 
+function onCut(event: ClipboardEvent) {
+  if (isTyping(event.target)) return;
+  const text = cutSelection();
+  if (!text) return;
+  event.clipboardData?.setData("text/plain", text);
+  event.preventDefault();
+}
+
 function onPaste(event: ClipboardEvent) {
   if (isTyping(event.target)) return;
   event.preventDefault();
@@ -86,10 +95,12 @@ function onPaste(event: ClipboardEvent) {
 export function attachShortcuts() {
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("copy", onCopy);
+  window.addEventListener("cut", onCut);
   window.addEventListener("paste", onPaste);
   return () => {
     window.removeEventListener("keydown", onKeyDown);
     window.removeEventListener("copy", onCopy);
+    window.removeEventListener("cut", onCut);
     window.removeEventListener("paste", onPaste);
   };
 }

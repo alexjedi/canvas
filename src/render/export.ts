@@ -59,6 +59,17 @@ async function renderBitmap(node: SceneNode, scale: number, format: "png" | "jpg
   return toBlob(canvas, format === "jpg" ? "image/jpeg" : "image/png");
 }
 
+export async function renderPng(id: string, scale: number): Promise<Blob | null> {
+  const node = nodes.get(id);
+  if (!node) return null;
+  await Promise.all(
+    collectSubtree(id)
+      .filter((item) => item.asset)
+      .map((item) => ensureBitmap(item.asset)),
+  );
+  return renderBitmap(node, scale, "png");
+}
+
 function readDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve) => {
     const reader = new FileReader();

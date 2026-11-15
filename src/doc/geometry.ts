@@ -260,6 +260,13 @@ export function rotateAroundCenter(id: string, rotation: number) {
   node.y = cy - (m[1] * hw + m[3] * hh);
 }
 
+export function placeCentre(node: SceneNode, cx: number, cy: number) {
+  const centre = apply(invert(mat(), setWorld(mat(), nodes.get(node.parent))), cx, cy);
+  const m = setLocal(mat(), node);
+  node.x = centre.x - (m[0] * node.width + m[2] * node.height) / 2;
+  node.y = centre.y - (m[1] * node.width + m[3] * node.height) / 2;
+}
+
 export function nearestFrame(node: SceneNode): string {
   let parent = nodes.get(node.parent);
   while (parent && parent.kind === "group") parent = nodes.get(parent.parent);

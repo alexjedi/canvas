@@ -1,4 +1,3 @@
-import { collectSubtree } from "../doc/create";
 import {
   ancestors,
   apply,
@@ -11,8 +10,8 @@ import {
   mat,
   nearestFrame,
   normalizeAngle,
+  placeCentre,
   reparent,
-  setLocal,
   setWorld,
   topLevel,
   unionBounds,
@@ -21,13 +20,14 @@ import {
 } from "../doc/geometry";
 import { applyGroupScale, captureGroup, type ScaleOrigin as GroupOrigin } from "../doc/groups";
 import { inFlow, isLayout, placeInLayout } from "../doc/layout";
+import { applyStyles, captureStyles, type StyleOrigin } from "../doc/scale";
 import { abort, begin, edit, end, nodes } from "../doc/store";
-import type { Point, Rect, SceneNode, TextRun } from "../doc/types";
-import { canEdit, startEditing } from "../editor/actions";
+import type { Point, Rect, SceneNode } from "../doc/types";
+import { canEdit, cloneInPlace, startEditing } from "../editor/actions";
 import { grid, prefs } from "../editor/prefs";
 import { labelAt } from "../editor/labels";
 import { camera, editor, select, setGuides, setHover, setLift, setMarquee, setRenaming } from "../editor/state";
-import { prepareSnap, resetSnap, snapBounds, snapPoint } from "./snap";
+import { prepareSnap, resetSnap, showGuides, snapBounds, snapOffsets, snapPoint } from "./snap";
 import { moved, type Pointer, type Tool } from "./types";
 
 type Mode = "idle" | "pending" | "move" | "resize" | "rotate" | "multi" | "marquee";
@@ -60,27 +60,13 @@ interface SpanOrigin {
   height: number;
   rotation: number;
   group: GroupOrigin[] | null;
+  styles: StyleOrigin[] | null;
 }
 
 interface MoveOrigin {
   id: string;
   wx: number;
   wy: number;
-}
-
-interface ScaleOrigin {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  radius: number;
-  strokeWidth: number;
-  gap: number;
-  padding: [number, number, number, number];
-  fontSize: number;
-  letterSpacing: number;
-  runs: TextRun[];
 }
 
 const HANDLE_REACH = 6;
@@ -144,13 +130,6 @@ function dragEdges(local: Point, hx: number, hy: number, startWidth: number, sta
   if (left > right) [left, right] = [right, left];
   if (top > bottom) [top, bottom] = [bottom, top];
   return { left, top, right, bottom };
-}
-
-function placeCentre(node: SceneNode, cx: number, cy: number) {
-  const centre = apply(invert(mat(), setWorld(mat(), nodes.get(node.parent))), cx, cy);
-  const m = setLocal(mat(), node);
-  node.x = centre.x - (m[0] * node.width + m[2] * node.height) / 2;
-  node.y = centre.y - (m[1] * node.width + m[3] * node.height) / 2;
 }
 
 function handleAt(node: SceneNode, pointer: Pointer): Handle | null {
@@ -229,7 +208,7 @@ export function createSelectTool(proportional: boolean): Tool {
   let upright = true;
   let startWidth = 0;
   let startHeight = 0;
-  let scaleOrigins: ScaleOrigin[] = [];
+  let scaleOrigins: StyleOrigin[] = [];
   let groupOrigins: GroupOrigin[] = [];
 
   function reset() {
@@ -315,7 +294,8 @@ export function createSelectTool(proportional: boolean): Tool {
         width: node.width,
         height: node.height,
         rotation: worldRotation(node),
-        group: node.kind === "group" ? captureGroup(id) : null,
+        group: !proportional && node.kind === "group" ? captureGroup(id) : null,
+        styles: proportional ? captureStyles(id) : null,
       });
     }
     begin();
@@ -334,7 +314,8 @@ export function createSelectTool(proportional: boolean): Tool {
       const sin = Math.sin(origin.rotation * RAD);
       const fx = Math.hypot(sx * cos, sy * sin);
       const fy = Math.hypot(sx * sin, sy * cos);
-      if (origin.group) applyGroupScale(origin.group, fx, fy);
+      if (origin.styles) applyStyles(origin.styles, node, sx);
+      else if (origin.group) applyGroupScale(origin.group, fx, fy);
       else {
         if (fx !== 1) node.sizeX = "fixed";
         if (fy !== 1) node.sizeY = "fixed";
@@ -350,15 +331,17 @@ export function createSelectTool(proportional: boolean): Tool {
     }
   }
 
-  function startMove() {
-    const ids = topLevel(editor.selection).filter((id) => !nodes.get(id)?.locked);
+  function startMove(copy: boolean) {
+    begin();
+    const picked = topLevel(editor.selection).filter((id) => !nodes.get(id)?.locked);
+    const ids = copy ? cloneInPlace(picked) : picked;
+    if (copy) select(ids);
     movingSet = new Set(ids);
     origins = ids.map((id) => {
       const world = setWorld(mat(), nodes.get(id));
       return { id, wx: world[4], wy: world[5] };
     });
     startBounds = unionBounds(ids);
-    begin();
     mode = "move";
   }
 
@@ -416,22 +399,7 @@ export function createSelectTool(proportional: boolean): Tool {
     upright = Math.abs(initial[1]) < 1e-9 && initial[0] > 0;
     startWidth = node.width;
     startHeight = node.height;
-    scaleOrigins = proportional
-      ? collectSubtree(node.id).map((item) => ({
-          id: item.id,
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-          radius: item.radius,
-          strokeWidth: item.stroke?.width ?? 0,
-          gap: item.gap,
-          padding: [item.paddingTop, item.paddingRight, item.paddingBottom, item.paddingLeft],
-          fontSize: item.fontSize,
-          letterSpacing: item.letterSpacing,
-          runs: item.runs,
-        }))
-      : [];
+    scaleOrigins = proportional ? captureStyles(node.id) : [];
     groupOrigins = !proportional && node.kind === "group" ? captureGroup(node.id) : [];
     prepareSnap(node.parent, new Set([node.id]));
     begin();
@@ -446,9 +414,37 @@ export function createSelectTool(proportional: boolean): Tool {
     const locked = pointer.shift || proportional;
     let target = { x: pointer.x, y: pointer.y };
     if (upright && !locked) target = snapPoint(pointer.x, pointer.y, hx !== 0, hy !== 0);
-    else setGuides([]);
+    else if (!upright) setGuides([]);
     const local = apply(initialInverse, target.x, target.y);
     let { left, top, right, bottom } = dragEdges(local, hx, hy, startWidth, startHeight, centered, locked);
+    if (upright && locked && right > left && bottom > top) {
+      const spanX = right - left;
+      const spanY = bottom - top;
+      const reach = centered ? 2 : 1;
+      const offset = snapOffsets(hx === 0 ? null : initial[4] + (hx < 0 ? left : right), hy === 0 ? null : initial[5] + (hy < 0 ? top : bottom));
+      const ratioX = offset.x !== 0 ? (spanX + offset.x * hx * reach) / spanX : 0;
+      const ratioY = offset.y !== 0 ? (spanY + offset.y * hy * reach) / spanY : 0;
+      const ratio = ratioX > 0 && ratioY > 0 ? (Math.abs(ratioX - 1) < Math.abs(ratioY - 1) ? ratioX : ratioY) : ratioX > 0 ? ratioX : ratioY;
+      if (ratio > 0) {
+        const nextX = spanX * ratio;
+        const nextY = spanY * ratio;
+        if (centered || hx === 0) {
+          left = (left + right - nextX) / 2;
+          right = left + nextX;
+        } else if (hx < 0) left = right - nextX;
+        else right = left + nextX;
+        if (centered || hy === 0) {
+          top = (top + bottom - nextY) / 2;
+          bottom = top + nextY;
+        } else if (hy < 0) top = bottom - nextY;
+        else bottom = top + nextY;
+      }
+      showGuides(
+        hx === 0 ? [] : [initial[4] + (hx < 0 ? left : right)],
+        hy === 0 ? [] : [initial[5] + (hy < 0 ? top : bottom)],
+        { x: initial[4] + left, y: initial[5] + top, width: right - left, height: bottom - top },
+      );
+    }
     const snap = upright && !proportional && prefs.pixelGrid;
     if (snap) {
       left = Math.round(initial[4] + left) - initial[4];
@@ -471,29 +467,7 @@ export function createSelectTool(proportional: boolean): Tool {
     if (node.kind === "text" && !proportional) node.textSizing = hy !== 0 || locked || node.textSizing === "fixed" ? "fixed" : "height";
     if (groupOrigins.length > 0 && startWidth > 0 && startHeight > 0) applyGroupScale(groupOrigins, width / startWidth, height / startHeight);
     if (!proportional || startWidth === 0) return;
-    const factor = width / startWidth;
-    for (const item of scaleOrigins) {
-      const scaled = item.id === resizeId ? node : edit(item.id);
-      if (!scaled) continue;
-      if (item.id !== resizeId) {
-        scaled.x = item.x * factor;
-        scaled.y = item.y * factor;
-        scaled.width = item.width * factor;
-        scaled.height = item.height * factor;
-      }
-      scaled.radius = item.radius * factor;
-      scaled.gap = item.gap * factor;
-      scaled.paddingTop = item.padding[0] * factor;
-      scaled.paddingRight = item.padding[1] * factor;
-      scaled.paddingBottom = item.padding[2] * factor;
-      scaled.paddingLeft = item.padding[3] * factor;
-      scaled.fontSize = item.fontSize * factor;
-      scaled.letterSpacing = item.letterSpacing * factor;
-      if (item.runs.length > 0) {
-        scaled.runs = item.runs.map((run) => ({ ...run, fontSize: run.fontSize * factor, letterSpacing: run.letterSpacing * factor }));
-      }
-      if (scaled.stroke && item.strokeWidth > 0) scaled.stroke = { ...scaled.stroke, width: item.strokeWidth * factor };
-    }
+    applyStyles(scaleOrigins, node, width / startWidth);
   }
 
   function applyMarquee(pointer: Pointer) {
@@ -582,7 +556,7 @@ export function createSelectTool(proportional: boolean): Tool {
 
     drag(pointer) {
       if (!start) return;
-      if (mode === "pending" && moved(start, pointer) && editor.selection.length > 0) startMove();
+      if (mode === "pending" && moved(start, pointer) && editor.selection.length > 0) startMove(pointer.alt);
       if (mode === "move") applyMove(pointer);
       else if (mode === "resize") applyResize(pointer);
       else if (mode === "rotate") applyRotate(pointer);
