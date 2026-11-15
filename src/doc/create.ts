@@ -1,5 +1,6 @@
-import { insertNodes, loadNodes, nodes } from "./store";
-import { ROOT, type NodeKind, type SceneNode } from "./types";
+import { insertNodes, loadNodes, nodes, removeNode, transact } from "./store";
+import { ROOT, type NodeKind, type Paint, type SceneNode } from "./types";
+import { commitVector, pixelPaths, STRIDE } from "./vector";
 
 const LABELS: Record<NodeKind, string> = {
   document: "Document",
@@ -9,6 +10,8 @@ const LABELS: Record<NodeKind, string> = {
   rect: "Rectangle",
   ellipse: "Ellipse",
   image: "Image",
+  vector: "Vector",
+  text: "Text",
 };
 
 const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
@@ -39,8 +42,25 @@ const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
   alignCross: "start",
   sizeX: "fixed",
   sizeY: "fixed",
+  paths: [],
+  text: "",
+  fontFamily: "system-ui",
+  fontSize: 16,
+  fontWeight: 400,
+  lineHeight: 1.2,
+  letterSpacing: 0,
+  textAlign: "left",
+  textSizing: "width",
   version: 0,
 };
+
+export const solid = (color: string): Paint => ({ color, opacity: 1, gradient: null });
+
+function defaultFill(kind: NodeKind): Paint | null {
+  if (kind === "frame") return solid("#ffffff");
+  if (kind === "rect" || kind === "ellipse") return solid("#d9d9d9");
+  return kind === "text" ? solid("#000000") : null;
+}
 
 export function createId(): string {
   const parts = crypto.getRandomValues(new Uint32Array(2));
@@ -62,7 +82,7 @@ export function createNode(kind: NodeKind, props: Partial<SceneNode> = {}): Scen
     kind,
     name: LABELS[kind],
     children: [],
-    fill: kind === "frame" ? { color: "#ffffff", opacity: 1 } : kind === "rect" || kind === "ellipse" ? { color: "#d9d9d9", opacity: 1 } : null,
+    fill: defaultFill(kind),
     clip: kind === "frame",
     ...props,
   };
@@ -98,4 +118,18 @@ export function cloneNodes(list: SceneNode[]): SceneNode[] {
     children: node.children.map((child) => ids.get(child)!).filter(Boolean),
     version: 0,
   }));
+}
+
+export function discardEmpty(id: string) {
+  const node = nodes.get(id);
+  if (!node) return;
+  if (node.kind === "text") {
+    if (node.text === "") removeNode(id);
+    return;
+  }
+  if (node.kind !== "vector") return;
+  const kept = pixelPaths(node).filter((path) => path.points.length >= STRIDE * 2);
+  if (kept.length === node.paths.length) return;
+  if (kept.length === 0) removeNode(id);
+  else transact(() => commitVector(id, kept, node.x, node.y));
 }

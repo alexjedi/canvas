@@ -1,6 +1,7 @@
 import { mat, setLocal } from "./geometry";
 import { isLayout, layoutFrame } from "./layout";
 import { edit, nodes, removeNode, setNormalizer } from "./store";
+import { fitText } from "./text";
 import type { SceneNode } from "./types";
 
 export interface ScaleOrigin {
@@ -69,6 +70,7 @@ function normalize(dirty: Set<string>) {
     for (const id of ids) {
       const node = nodes.get(id);
       if (!node) continue;
+      if (node.kind === "text") fitText(node);
       const parent = nodes.get(node.parent);
       if (node.kind === "group") groups.add(node);
       if (parent?.kind === "group") groups.add(parent);
@@ -120,6 +122,10 @@ export function resizeNode(id: string, width: number, height: number) {
   if (!target) return;
   if (width !== target.width) target.sizeX = "fixed";
   if (height !== target.height) target.sizeY = "fixed";
+  if (target.kind === "text") {
+    if (height !== target.height) target.textSizing = "fixed";
+    else if (width !== target.width && target.textSizing === "width") target.textSizing = "height";
+  }
   target.width = width;
   target.height = height;
 }

@@ -1,15 +1,17 @@
 import { Blend, Minus as Weight } from "lucide-react";
-import type { Stroke, StrokeAlign } from "../../doc/types";
+import type { SceneNode, Stroke, StrokeAlign } from "../../doc/types";
 import { patchSelected, setSelected } from "../../editor/actions";
 import { ColorField } from "../controls/ColorField";
 import { NumberField } from "../controls/NumberField";
 import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
 import { Select } from "../controls/Select";
-import { MIXED, paintOf, useSelected } from "../hooks";
+import { MIXED, paintOf, useSelected, useSelectionEvery } from "../hooks";
 import { PaintToggle } from "./PaintToggle";
 
-const DEFAULT_STROKE: Stroke = { color: "#000000", opacity: 1, width: 1, align: "inside" };
+const DEFAULT_STROKE: Stroke = { color: "#000000", opacity: 1, gradient: null, width: 1, align: "inside" };
+
+const isFreeform = (node: SceneNode) => node.kind === "vector" || node.kind === "text";
 
 const ALIGNMENTS: Array<{ value: StrokeAlign; label: string }> = [
   { value: "inside", label: "Inside" },
@@ -21,6 +23,7 @@ export function StrokeSection() {
   const value = useSelected("stroke");
   const stroke = paintOf(value);
   const present = value === MIXED || !!value;
+  const freeform = useSelectionEvery(isFreeform);
   const update = (patch: Partial<Stroke>) => patchSelected("stroke", patch, DEFAULT_STROKE);
 
   return (
@@ -44,7 +47,7 @@ export function StrokeSection() {
           </div>
           <Row>
             <NumberField label={<Weight size={12} />} name="Stroke width" min={0} value={stroke?.width ?? null} onChange={(width) => update({ width })} />
-            <Select value={stroke?.align ?? null} options={ALIGNMENTS} onChange={(align) => update({ align })} />
+            {!freeform && <Select value={stroke?.align ?? null} options={ALIGNMENTS} onChange={(align) => update({ align })} />}
           </Row>
         </>
       )}

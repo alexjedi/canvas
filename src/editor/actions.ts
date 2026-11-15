@@ -1,12 +1,13 @@
 import { importImage } from "../doc/assets";
 import { addPage, cloneNodes, collectSubtree, createNode, nextName } from "../doc/create";
+import { commitVector, removePoints, shapePaths } from "../doc/vector";
 import { apply, frameAt, invert, isContainer, mat, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
 import { resizeNode } from "../doc/groups";
 import { inferLayout, isLayout } from "../doc/layout";
 import { canRedo, canUndo, edit, insertNodes, moveNode, nodes, redo, removeNode, setProps, transact, undo } from "../doc/store";
-import { ROOT, type NodeProps, type Point, type SceneNode } from "../doc/types";
+import { ROOT, type NodeProps, type Point, type SceneNode, type TextSizing } from "../doc/types";
 import { grid } from "./prefs";
-import { camera, editor, sanitize, select, setCamera, setPage, toWorld, viewport, type DropPosition } from "./state";
+import { camera, editor, sanitize, select, setCamera, setEditing, setPage, setPoints, setTool, toWorld, viewport, type DropPosition } from "./state";
 
 const FIT_PADDING = 64;
 const DUPLICATE_GAP = 100;
@@ -42,7 +43,41 @@ export function patchSelected<K extends "fill" | "stroke">(key: K, patch: Partia
   }, `${key}:${editor.selection.join()}`);
 }
 
+export const canEdit = (node: SceneNode) => !node.locked && (node.kind === "vector" || node.kind === "text" || node.kind === "rect" || node.kind === "ellipse");
+
+export function startEditing(id: string) {
+  const node = nodes.get(id);
+  if (!node || !canEdit(node)) return;
+  if (node.kind === "rect" || node.kind === "ellipse") {
+    transact(() => {
+      const outline = shapePaths(node);
+      const target = edit(id);
+      if (!target) return;
+      target.kind = "vector";
+      target.radius = 0;
+      if (target.stroke && target.stroke.align !== "center") target.stroke = { ...target.stroke, align: "center" };
+      commitVector(id, outline, node.x, node.y);
+    });
+  }
+  select([id]);
+  setEditing(id);
+}
+
+export function stopEditing() {
+  setEditing("");
+  if (editor.tool === "pen") setTool("move");
+}
+
 export function deleteSelection() {
+  const edited = nodes.get(editor.editing);
+  if (edited?.kind === "vector" && editor.points.length > 0) {
+    const doomed = editor.points;
+    setPoints([]);
+    transact(() => {
+      if (!removePoints(edited.id, doomed)) removeNode(edited.id);
+    });
+    return;
+  }
   const ids = roots();
   if (!ids.length) return;
   transact(() => ids.forEach(removeNode));
@@ -310,6 +345,14 @@ export function resizeSelected(key: "width" | "height", value: number) {
       if (node) resizeNode(id, key === "width" ? value : node.width, key === "height" ? value : node.height);
     }
   }, `${key}:${editor.selection.join()}`);
+}
+
+export function setTextSizing(sizing: TextSizing) {
+  const props: Partial<NodeProps> =
+    sizing === "width" ? { textSizing: sizing, sizeX: "fixed", sizeY: "fixed" } : sizing === "height" ? { textSizing: sizing, sizeY: "fixed" } : { textSizing: sizing };
+  transact(() => {
+    for (const id of editor.selection) setProps(id, props);
+  });
 }
 
 export function setPageProps(props: Partial<NodeProps>, mergeKey = "") {

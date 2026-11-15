@@ -1,7 +1,8 @@
 import { getBitmap } from "../doc/assets";
 import type { Mat } from "../doc/geometry";
-import type { Paint, SceneNode, Stroke } from "../doc/types";
-import { rasterize, strokeOutset } from "./raster";
+import { layoutText, type TextLayout } from "../doc/text";
+import type { Paint, SceneNode, Stroke, VectorPath } from "../doc/types";
+import { paintOutset, rasterize } from "./raster";
 
 export interface Tile {
   texture: WebGLTexture;
@@ -21,6 +22,8 @@ export interface Tile {
   kind: SceneNode["kind"];
   fit: SceneNode["fit"];
   bitmap: ImageBitmap | undefined;
+  paths: VectorPath[];
+  layout: TextLayout | null;
 }
 
 const FULL_LIMIT = 2048;
@@ -72,6 +75,8 @@ export function createCache(gl: WebGL2RenderingContext) {
       tile.fill === node.fill &&
       tile.stroke === node.stroke &&
       tile.kind === node.kind &&
+      tile.paths === node.paths &&
+      (node.kind !== "text" || tile.layout === layoutText(node)) &&
       (node.kind !== "image" || (tile.fit === node.fit && tile.bitmap === getBitmap(node.asset)))
     );
   }
@@ -87,7 +92,7 @@ export function createCache(gl: WebGL2RenderingContext) {
   }
 
   function paint(node: SceneNode, existing: Tile | undefined, scale: number, viewWidth: number, viewHeight: number): Tile | null {
-    const padPixels = Math.ceil(strokeOutset(node) * scale) + 1;
+    const padPixels = Math.ceil(paintOutset(node) * scale) + 1;
     const pad = padPixels / scale;
     let pixelWidth = Math.ceil(node.width * scale) + padPixels * 2;
     let pixelHeight = Math.ceil(node.height * scale) + padPixels * 2;
@@ -141,6 +146,8 @@ export function createCache(gl: WebGL2RenderingContext) {
     tile.kind = node.kind;
     tile.fit = node.fit;
     tile.bitmap = node.kind === "image" ? getBitmap(node.asset) : undefined;
+    tile.paths = node.paths;
+    tile.layout = node.kind === "text" ? layoutText(node) : null;
     tiles.set(node.id, tile);
     return tile;
   }
@@ -154,7 +161,7 @@ export function createCache(gl: WebGL2RenderingContext) {
 
     resolve(node: SceneNode, m: Mat, scale: number, viewWidth: number, viewHeight: number, settled: boolean): Tile | null {
       const tile = tiles.get(node.id);
-      const pad = (Math.ceil(strokeOutset(node) * scale) + 1) / scale;
+      const pad = (Math.ceil(paintOutset(node) * scale) + 1) / scale;
       measureVisible(node, m, pad, viewWidth, viewHeight);
       if (tile && isCurrent(tile, node) && (tile.full || covers(tile))) {
         const sharp = tile.scale === scale;

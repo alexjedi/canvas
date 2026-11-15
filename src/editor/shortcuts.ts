@@ -12,6 +12,8 @@ import {
   reorder,
   selectAll,
   selectParent,
+  startEditing,
+  stopEditing,
   toggleSelected,
   undoAction,
   ungroupSelection,
@@ -21,7 +23,7 @@ import {
 } from "./actions";
 import { editor, select, setTool, viewport, type ToolId } from "./state";
 
-const TOOL_KEYS: Record<string, ToolId> = { v: "move", k: "scale", f: "frame", r: "rect", o: "ellipse", h: "hand" };
+const TOOL_KEYS: Record<string, ToolId> = { v: "move", k: "scale", f: "frame", r: "rect", o: "ellipse", h: "hand", p: "pen", t: "text" };
 
 const isTyping = (target: EventTarget | null) => target instanceof HTMLElement && !!target.closest("input, textarea, select, [contenteditable]");
 const ARROWS: Record<string, [number, number]> = {
@@ -55,8 +57,9 @@ function onKeyDown(event: KeyboardEvent) {
   else if (event.code === "Digit1" && event.shiftKey) zoomToFit();
   else if (event.code === "Digit2" && event.shiftKey) zoomToFit(editor.selection);
   else if (key === "Backspace" || key === "Delete") deleteSelection();
-  else if (key === "Escape") select([]);
+  else if (key === "Escape") editor.editing ? stopEditing() : select([]);
   else if (key === "Enter" && event.shiftKey) selectParent();
+  else if (key === "Enter") editor.editing ? stopEditing() : editor.selection.length === 1 ? startEditing(editor.selection[0]) : (handled = false);
   else if (ARROWS[key]) nudge(ARROWS[key][0] * (event.shiftKey ? 10 : 1), ARROWS[key][1] * (event.shiftKey ? 10 : 1));
   else if (TOOL_KEYS[key] && !event.shiftKey && !event.altKey) setTool(TOOL_KEYS[key]);
   else handled = false;

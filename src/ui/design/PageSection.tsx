@@ -9,7 +9,7 @@ import { Switch } from "../controls/Switch";
 import { useFrame } from "../hooks";
 import { PaintToggle } from "./PaintToggle";
 
-const DEFAULT_BACKGROUND: Paint = { color: "#f5f5f5", opacity: 1 };
+const DEFAULT_BACKGROUND: Paint = { color: "#f5f5f5", opacity: 1, gradient: null };
 
 export function PageSection() {
   const fill = useFrame(() => nodes.get(editor.page)?.fill ?? null);
@@ -29,7 +29,7 @@ export function PageSection() {
           />
         }
       >
-        {fill && <ColorField value={fill} alpha={false} onChange={(paint) => setPageProps({ fill: paint }, "page-background")} />}
+        {fill && <ColorField value={fill} alpha={false} gradients={false} onChange={(paint) => setPageProps({ fill: paint }, "page-background")} />}
       </Section>
       <Section title="Snapping">
         <Switch label="Snap to pixel grid" checked={pixelGrid} onChange={(value) => setPref("pixelGrid", value)} />

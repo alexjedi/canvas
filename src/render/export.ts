@@ -1,8 +1,11 @@
 import { ensureBitmap, getBitmap, getBlob } from "../doc/assets";
 import { collectSubtree } from "../doc/create";
 import { nodes } from "../doc/store";
-import type { SceneNode } from "../doc/types";
-import { cornerRadius, paintNode, strokeOutset, tracePath, type Context } from "./raster";
+import { fontFamilyCss, layoutText } from "../doc/text";
+import type { Paint, SceneNode } from "../doc/types";
+import { tracePaths, type PathSink } from "../doc/vector";
+import { linearAxis, radialStretch } from "./paint";
+import { cornerRadius, paintNode, strokeOffset, strokeOutset, tracePath, type Context } from "./raster";
 
 export type ExportFormat = "png" | "jpg" | "svg";
 
@@ -64,8 +67,62 @@ function readDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+const escapeXml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function pathData(node: SceneNode): string {
+  const parts: string[] = [];
+  const sink: PathSink = {
+    moveTo: (x, y) => parts.push(`M${round(x)} ${round(y)}`),
+    bezierCurveTo: (c1x, c1y, c2x, c2y, x, y) => parts.push(`C${round(c1x)} ${round(c1y)} ${round(c2x)} ${round(c2y)} ${round(x)} ${round(y)}`),
+    closePath: () => parts.push("Z"),
+  };
+  tracePaths(sink, node.paths, node.width, node.height);
+  return parts.join("");
+}
+
+function paintAttributes(key: "fill" | "stroke", paint: Paint, node: SceneNode, defs: string[]): string {
+  const opacity = ` ${key}-opacity="${round(paint.opacity)}"`;
+  const gradient = paint.gradient;
+  if (!gradient || gradient.stops.length === 0) return ` ${key}="${paint.color}"${opacity}`;
+  const id = `paint${defs.length}`;
+  const stops = gradient.stops
+    .map((stop) => `<stop offset="${round(Math.min(1, Math.max(0, stop.offset)))}" stop-color="${stop.color}" stop-opacity="${round(stop.opacity)}"/>`)
+    .join("");
+  if (gradient.type === "linear") {
+    const axis = linearAxis(gradient.angle, node.width, node.height);
+    defs.push(
+      `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${round(axis[0])}" y1="${round(axis[1])}" x2="${round(axis[2])}" y2="${round(axis[3])}">${stops}</linearGradient>`,
+    );
+  } else {
+    const stretch = radialStretch(paint, node.width, node.height);
+    const radius = stretch === 1 ? Math.max(node.width, node.height, 1) / 2 : node.width / 2;
+    const cy = stretch === 1 ? node.height / 2 : node.width / 2;
+    const transform = stretch === 1 ? "" : ` gradientTransform="scale(1 ${round(stretch)})"`;
+    defs.push(
+      `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${round(node.width / 2)}" cy="${round(cy)}" r="${round(radius)}"${transform}>${stops}</radialGradient>`,
+    );
+  }
+  return ` ${key}="url(#${id})"${opacity}`;
+}
+
+function textMarkup(node: SceneNode, defs: string[]): string {
+  const layout = layoutText(node);
+  const { fill, stroke } = node;
+  const anchor = layout.align === "left" ? "start" : layout.align === "center" ? "middle" : "end";
+  const x = layout.align === "left" ? 0 : layout.align === "center" ? node.width / 2 : node.width;
+  const spans = layout.lines
+    .map((line, index) => `<tspan x="${round(x)}" y="${round(layout.baseline + index * layout.lineHeight)}">${escapeXml(line)}</tspan>`)
+    .join("");
+  const paint = fill ? paintAttributes("fill", fill, node, defs) : ` fill="none"`;
+  const outline =
+    stroke && stroke.width > 0 ? `${paintAttributes("stroke", stroke, node, defs)} stroke-width="${round(stroke.width)}" stroke-linejoin="round"` : "";
+  const spacing = node.letterSpacing ? ` letter-spacing="${round(node.letterSpacing)}"` : "";
+  return `<text xml:space="preserve" font-family="${escapeXml(fontFamilyCss(node.fontFamily))}" font-size="${round(node.fontSize)}" font-weight="${node.fontWeight}" text-anchor="${anchor}"${spacing}${paint}${outline}>${spans}</text>`;
+}
+
 function shape(node: SceneNode, offset: number, attributes: string): string {
   const { width, height } = node;
+  if (node.kind === "vector") return `<path d="${pathData(node)}"${attributes}/>`;
   if (node.kind === "ellipse") {
     return `<ellipse cx="${round(width / 2)}" cy="${round(height / 2)}" rx="${round(Math.max(0, width / 2 + offset))}" ry="${round(Math.max(0, height / 2 + offset))}"${attributes}/>`;
   }
@@ -76,8 +133,9 @@ function shape(node: SceneNode, offset: number, attributes: string): string {
 
 function serialize(node: SceneNode, defs: string[], urls: Map<string, string>): string {
   const { fill, stroke } = node;
+  if (node.kind === "text") return textMarkup(node, defs);
   const parts: string[] = [];
-  if (fill) parts.push(shape(node, 0, ` fill="${fill.color}" fill-opacity="${round(fill.opacity)}"`));
+  if (fill) parts.push(shape(node, 0, paintAttributes("fill", fill, node, defs)));
   const bitmap = node.kind === "image" ? getBitmap(node.asset) : undefined;
   const url = urls.get(node.asset);
   if (bitmap && url) {
@@ -97,10 +155,8 @@ function serialize(node: SceneNode, defs: string[], urls: Map<string, string>): 
     }
   }
   if (stroke && stroke.width > 0) {
-    const offset = stroke.align === "inside" ? -stroke.width / 2 : stroke.align === "outside" ? stroke.width / 2 : 0;
-    parts.push(
-      shape(node, offset, ` fill="none" stroke="${stroke.color}" stroke-width="${round(stroke.width)}" stroke-opacity="${round(stroke.opacity)}"`),
-    );
+    const limit = node.kind === "vector" ? ` stroke-miterlimit="4"` : "";
+    parts.push(shape(node, strokeOffset(node), ` fill="none"${paintAttributes("stroke", stroke, node, defs)} stroke-width="${round(stroke.width)}"${limit}`));
   }
   const children: string[] = [];
   for (const id of node.children) {
@@ -153,7 +209,9 @@ function download(blob: Blob, name: string) {
 export async function exportNodes(ids: readonly string[], format: ExportFormat, scale: number) {
   for (const id of ids) {
     const node = nodes.get(id);
-    if (!node || node.width <= 0 || node.height <= 0) continue;
+    if (!node) continue;
+    const reach = strokeOutset(node);
+    if (node.width + reach <= 0 || node.height + reach <= 0) continue;
     const tree = collectSubtree(id);
     await Promise.all(tree.filter((item) => item.asset).map((item) => ensureBitmap(item.asset)));
     const blob = format === "svg" ? await renderSvg(node, tree) : await renderBitmap(node, scale, format);

@@ -21,6 +21,7 @@ import { applyGroupScale, captureGroup, type ScaleOrigin as GroupOrigin } from "
 import { isLayout, placeInLayout } from "../doc/layout";
 import { abort, begin, edit, end, nodes } from "../doc/store";
 import type { Rect, SceneNode } from "../doc/types";
+import { canEdit, startEditing } from "../editor/actions";
 import { grid, prefs } from "../editor/prefs";
 import { camera, editor, select, setGuides, setHover, setMarquee } from "../editor/state";
 import { prepareSnap, resetSnap, snapBounds, snapPoint } from "./snap";
@@ -49,6 +50,8 @@ interface ScaleOrigin {
   strokeWidth: number;
   gap: number;
   padding: [number, number, number, number];
+  fontSize: number;
+  letterSpacing: number;
 }
 
 const HANDLE_REACH = 6;
@@ -217,6 +220,8 @@ export function createSelectTool(proportional: boolean): Tool {
           strokeWidth: item.stroke?.width ?? 0,
           gap: item.gap,
           padding: [item.paddingTop, item.paddingRight, item.paddingBottom, item.paddingLeft],
+          fontSize: item.fontSize,
+          letterSpacing: item.letterSpacing,
         }))
       : [];
     groupOrigins = !proportional && node.kind === "group" ? captureGroup(node.id) : [];
@@ -285,6 +290,7 @@ export function createSelectTool(proportional: boolean): Tool {
     node.height = height;
     if (hx !== 0 || locked) node.sizeX = "fixed";
     if (hy !== 0 || locked) node.sizeY = "fixed";
+    if (node.kind === "text" && !proportional) node.textSizing = hy !== 0 || locked || node.textSizing === "fixed" ? "fixed" : "height";
     if (groupOrigins.length > 0 && startWidth > 0 && startHeight > 0) applyGroupScale(groupOrigins, width / startWidth, height / startHeight);
     if (!proportional || startWidth === 0) return;
     const factor = width / startWidth;
@@ -303,6 +309,8 @@ export function createSelectTool(proportional: boolean): Tool {
       scaled.paddingRight = item.padding[1] * factor;
       scaled.paddingBottom = item.padding[2] * factor;
       scaled.paddingLeft = item.padding[3] * factor;
+      scaled.fontSize = item.fontSize * factor;
+      scaled.letterSpacing = item.letterSpacing * factor;
       if (scaled.stroke && item.strokeWidth > 0) scaled.stroke = { ...scaled.stroke, width: item.strokeWidth * factor };
     }
   }
@@ -353,6 +361,11 @@ export function createSelectTool(proportional: boolean): Tool {
         return;
       }
       wasSelected = editor.selected.has(target.id);
+      if (pointer.clicks > 1 && wasSelected && canEdit(target)) {
+        startEditing(target.id);
+        reset();
+        return;
+      }
       const background = target.kind === "frame" && target.children.length > 0 && isContainer(nodes.get(target.parent));
       if (background && !wasSelected && !pointer.meta && pointer.clicks < 2) {
         pendingFrame = target.id;

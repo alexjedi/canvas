@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { nodes } from "../doc/store";
-import type { NodeProps, Paint, SceneNode, Stroke } from "../doc/types";
+import type { Gradient, NodeProps, Paint, SceneNode, Stroke } from "../doc/types";
 import { editor } from "../editor/state";
 import { subscribe } from "../frame";
 
@@ -13,12 +13,27 @@ export function useFrame<T>(read: () => T): T {
 
 export const useNodeVersion = (id: string) => useFrame(() => nodes.get(id)?.version ?? -1);
 
+function sameGradient(a: Gradient | null, b: Gradient | null): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.type !== b.type || a.angle !== b.angle || a.stops.length !== b.stops.length) return false;
+  return a.stops.every((stop, index) => {
+    const other = b.stops[index];
+    return stop.offset === other.offset && stop.color === other.color && stop.opacity === other.opacity;
+  });
+}
+
 function same(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
   const left = a as Partial<Stroke>;
   const right = b as Partial<Stroke>;
-  return left.color === right.color && left.opacity === right.opacity && left.width === right.width && left.align === right.align;
+  return (
+    left.color === right.color &&
+    left.opacity === right.opacity &&
+    left.width === right.width &&
+    left.align === right.align &&
+    sameGradient(left.gradient ?? null, right.gradient ?? null)
+  );
 }
 
 export function useSelected<K extends keyof NodeProps>(key: K): NodeProps[K] | Mixed | undefined {

@@ -7,7 +7,7 @@ import { Section } from "../controls/Section";
 import { MIXED, paintOf, useSelected } from "../hooks";
 import { PaintToggle } from "./PaintToggle";
 
-const DEFAULT_FILL: Paint = { color: "#d9d9d9", opacity: 1 };
+const DEFAULT_FILL: Paint = { color: "#d9d9d9", opacity: 1, gradient: null };
 
 export function FillSection() {
   const value = useSelected("fill");

@@ -9,7 +9,7 @@ pnpm dev
 
 `pnpm build` typechecks and builds to `dist/`.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
+Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
 
 The document and its images autosave to the browser.
 
@@ -41,7 +41,7 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
 
 ### Up next
 
-Written but waiting on a visual check: everything above except pen, text and the bezel preview.
+Written but waiting on a visual check: everything above except the bezel preview, plus pen and vector editing, text, and gradients below. Still unwritten: the smaller gaps and the bezel preview.
 
 - [ ] **Pen and vector editing**
   - [ ] `vector` layer: one or more open or closed paths of points with bezier handles; its box always fits the path

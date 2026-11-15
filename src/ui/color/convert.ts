@@ -1,6 +1,7 @@
-import type { Paint } from "../../doc/types";
+import type { Gradient, GradientStop, Paint } from "../../doc/types";
 import type { Notation } from "../../editor/prefs";
 import { hexToRgb, parseCss, toHex } from "../../render/color";
+import { stopColor } from "../../render/paint";
 
 const trim = (value: number, digits: number) => String(Math.round(value * 10 ** digits) / 10 ** digits);
 
@@ -56,5 +57,37 @@ export function formatColor(paint: Paint, notation: Notation, alpha: boolean): s
 export function parseColor(text: string): Paint | null {
   const value = text.trim();
   const parsed = parseCss(/^[0-9a-f]{3,8}$/i.test(value) ? `#${value}` : value);
-  return parsed ? { color: toHex(parsed), opacity: Math.round(parsed[3] * 100) / 100 } : null;
+  return parsed ? { color: toHex(parsed), opacity: Math.round(parsed[3] * 100) / 100, gradient: null } : null;
+}
+
+export function cssGradient(gradient: Gradient): string {
+  const stops = gradient.stops.map((stop) => `${stopColor(stop)} ${trim(stop.offset * 100, 2)}%`).join(", ");
+  return gradient.type === "linear" ? `linear-gradient(${gradient.angle + 90}deg, ${stops})` : `radial-gradient(ellipse closest-side, ${stops})`;
+}
+
+export function defaultGradient(type: Gradient["type"], color: string): Gradient {
+  return { type, angle: 90, stops: [{ offset: 0, color, opacity: 1 }, { offset: 1, color, opacity: 0 }] };
+}
+
+export function stopAt(stops: readonly GradientStop[], offset: number): GradientStop {
+  let before = stops[0];
+  let after = stops[stops.length - 1];
+  for (const stop of stops) {
+    if (stop.offset <= offset) before = stop;
+    else {
+      after = stop;
+      break;
+    }
+  }
+  if (before.offset > offset) before = after = stops[0];
+  if (after.offset < offset) after = before;
+  const span = after.offset - before.offset;
+  const t = span > 0 ? (offset - before.offset) / span : 0;
+  const from = hexToRgb(before.color);
+  const to = hexToRgb(after.color);
+  return {
+    offset,
+    color: toHex([from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t]),
+    opacity: Math.round((before.opacity + (after.opacity - before.opacity) * t) * 100) / 100,
+  };
 }

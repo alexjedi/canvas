@@ -1,16 +1,21 @@
 import { mat, multiply, setLocal, setWorld, unionBounds, type Mat } from "../doc/geometry";
 import { nodes } from "../doc/store";
 import type { SceneNode } from "../doc/types";
+import { segmentCount, STRIDE } from "../doc/vector";
 import { camera, editor, viewport } from "../editor/state";
 import { invalidate } from "../frame";
 import { createCache } from "./cache";
 import { cssColor, type Rgb } from "./color";
 import { createProgram, type Program } from "./gl";
-import { cornerRadius, isPaintable, strokeOutset } from "./raster";
+import { cornerRadius, isPaintable, paintOutset } from "./raster";
 import { MASK_FRAGMENT, SOLID_FRAGMENT, TEXTURE_FRAGMENT, VERTEX } from "./shaders";
 
 const SETTLE_MS = 120;
 const HANDLE_SIZE = 8;
+const ANCHOR_SIZE = 7;
+const KNOB_SIZE = 5;
+const CURVE_STEPS = 16;
+const WHITE: Rgb = [1, 1, 1];
 const MAX_CLIP_DEPTH = 255;
 const FALLBACK_ACCENT: Rgb = [0.05, 0.6, 1];
 const FALLBACK_GUIDE: Rgb = [1, 0.25, 0.3];
@@ -38,6 +43,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   let guide = FALLBACK_GUIDE;
   let scale = 1;
   let settled = true;
+  let concealed = "";
 
   function setup() {
     texture = createProgram(gl!, VERTEX, TEXTURE_FRAGMENT, ["u_rect", "u_matrix", "u_resolution", "u_texture", "u_alpha"]);
@@ -115,13 +121,13 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       const node = nodes.get(parent.children[i]);
       if (!node || !node.visible) continue;
       multiply(m, stack[depth], setLocal(m, node));
-      measure(node, m, strokeOutset(node));
+      measure(node, m, paintOutset(node));
       const visible = onScreen();
       const hasChildren = node.children.length > 0;
       if (!visible && (!hasChildren || node.clip)) continue;
       const opacity = alpha * node.opacity;
       if (opacity <= 0) continue;
-      if (visible && isPaintable(node) && node.width > 0 && node.height > 0) {
+      if (visible && node.id !== concealed && isPaintable(node)) {
         const tile = cache.resolve(node, m, scale, canvas.width, canvas.height, settled);
         if (tile) {
           use(texture);
@@ -204,6 +210,79 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
+  function square(x: number, y: number, size: number, filled: boolean) {
+    const left = Math.round(x - size / 2);
+    const top = Math.round(y - size / 2);
+    const border = Math.max(1, Math.round(viewport.dpr));
+    fillRect(left, top, size, size, 1);
+    if (!filled) fillRect(left + border, top + border, size - border * 2, size - border * 2, 1, WHITE);
+  }
+
+  function curve(x0: number, y0: number, c1x: number, c1y: number, c2x: number, c2y: number, x1: number, y1: number, thickness: number) {
+    let px = x0;
+    let py = y0;
+    for (let step = 1; step <= CURVE_STEPS; step++) {
+      const t = step / CURVE_STEPS;
+      const u = 1 - t;
+      const a = u * u * u;
+      const b = 3 * u * u * t;
+      const c = 3 * u * t * t;
+      const d = t * t * t;
+      const x = a * x0 + b * c1x + c * c2x + d * x1;
+      const y = a * y0 + b * c1y + c * c2y + d * y1;
+      line(px, py, x, y, thickness);
+      px = x;
+      py = y;
+    }
+  }
+
+  function drawVector(node: SceneNode, thickness: number) {
+    multiply(world, stack[0], setWorld(world, node));
+    const { width, height } = node;
+    const sx = (x: number, y: number) => world[0] * x * width + world[2] * y * height + world[4];
+    const sy = (x: number, y: number) => world[1] * x * width + world[3] * y * height + world[5];
+    const anchor = ANCHOR_SIZE * viewport.dpr;
+    const knob = KNOB_SIZE * viewport.dpr;
+    const selected = editor.points;
+    const pen = editor.pen;
+    let offset = 0;
+    for (let index = 0; index < node.paths.length; index++) {
+      const path = node.paths[index];
+      const p = path.points;
+      const count = p.length / STRIDE;
+      const segments = segmentCount(path);
+      for (let i = 0; i < segments; i++) {
+        const a = i * STRIDE;
+        const b = ((i + 1) % count) * STRIDE;
+        curve(sx(p[a], p[a + 1]), sy(p[a], p[a + 1]), sx(p[a + 4], p[a + 5]), sy(p[a + 4], p[a + 5]), sx(p[b + 2], p[b + 3]), sy(p[b + 2], p[b + 3]), sx(p[b], p[b + 1]), sy(p[b], p[b + 1]), thickness);
+      }
+      const last = index === node.paths.length - 1 && !path.closed && count > 0 ? count - 1 : -1;
+      if (pen && last >= 0) {
+        const o = last * STRIDE;
+        const ex = pen.x * stack[0][0] + stack[0][4];
+        const ey = pen.y * stack[0][3] + stack[0][5];
+        curve(sx(p[o], p[o + 1]), sy(p[o], p[o + 1]), sx(p[o + 4], p[o + 5]), sy(p[o + 4], p[o + 5]), ex, ey, ex, ey, thickness);
+      }
+      for (let i = 0; i < count; i++) {
+        const o = i * STRIDE;
+        const active = selected.includes(offset + i);
+        const ax = sx(p[o], p[o + 1]);
+        const ay = sy(p[o], p[o + 1]);
+        if (active || (pen && i === last)) {
+          for (let side = 2; side <= 4; side += 2) {
+            if (p[o + side] === p[o] && p[o + side + 1] === p[o + 1]) continue;
+            const hx = sx(p[o + side], p[o + side + 1]);
+            const hy = sy(p[o + side], p[o + side + 1]);
+            line(ax, ay, hx, hy, thickness);
+            square(hx, hy, knob, false);
+          }
+        }
+        square(ax, ay, anchor, active);
+      }
+      offset += count;
+    }
+  }
+
   function drawOverlay() {
     gl!.disable(gl!.STENCIL_TEST);
     use(solid);
@@ -212,7 +291,9 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     const selection = editor.selection;
     const view = stack[0];
     if (editor.hover && !editor.selected.has(editor.hover)) outline(editor.hover, thin * 2, false);
-    for (const id of selection) outline(id, thin, selection.length === 1);
+    const edited = nodes.get(editor.editing);
+    for (const id of selection) if (id !== editor.editing) outline(id, thin, selection.length === 1);
+    if (edited?.kind === "vector") drawVector(edited, thin);
     if (selection.length > 1) {
       const bounds = unionBounds(selection);
       if (bounds) {
@@ -241,6 +322,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   function draw(overlay = true) {
     if (gl!.isContextLost() || canvas.width === 0 || canvas.height === 0) return;
     const page = nodes.get(editor.page);
+    concealed = overlay && nodes.get(editor.editing)?.kind === "text" ? editor.editing : "";
     scale = camera.zoom * viewport.dpr;
     settled = performance.now() - camera.zoomedAt > SETTLE_MS;
     const view = stack[0];

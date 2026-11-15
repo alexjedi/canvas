@@ -1,12 +1,16 @@
 import { ancestors, hitTest } from "../doc/geometry";
 import { flushDirty } from "../doc/store";
 import { addImages, fitIfNeeded, zoomAt } from "../editor/actions";
+import { nodes } from "../doc/store";
 import { camera, editor, select, setCamera, setEyedropper, toWorld, viewport, type ToolId } from "../editor/state";
 import { pickColor } from "../render/sample";
 import { invalidate, subscribe } from "../frame";
 import { createShapeTool } from "./create";
 import { handTool } from "./hand";
+import { createPenTool } from "./pen";
+import { createPointsTool } from "./points";
 import { createSelectTool } from "./select";
+import { createTextTool } from "./text";
 import type { Pointer, Tool } from "./types";
 
 interface GestureEvent extends UIEvent {
@@ -21,8 +25,12 @@ const TOOLS: Record<ToolId, Tool> = {
   frame: createShapeTool("frame"),
   rect: createShapeTool("rect"),
   ellipse: createShapeTool("ellipse"),
+  pen: createPenTool(),
+  text: createTextTool(),
   hand: handTool,
 };
+
+const pointsTool = createPointsTool();
 
 const ZOOM_SPEED = 0.01;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -33,7 +41,10 @@ export function attachInput(canvas: HTMLCanvasElement) {
   let gestureZoom = 1;
   let lastTool = editor.tool;
 
-  const current = () => (space ? handTool : TOOLS[editor.tool]);
+  const current = () => {
+    if (space) return handTool;
+    return editor.tool === "move" && nodes.get(editor.editing)?.kind === "vector" ? pointsTool : TOOLS[editor.tool];
+  };
 
   function pointerOf(event: PointerEvent | MouseEvent): Pointer {
     const bounds = canvas.getBoundingClientRect();

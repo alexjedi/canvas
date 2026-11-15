@@ -10,7 +10,7 @@ export function ColorInput({ value, notation, alpha, onChange }: { value: Paint 
 
   function commit() {
     const parsed = draft === null || draft === shown ? null : parseColor(draft);
-    if (parsed) onChange(alpha ? parsed : { color: parsed.color, opacity: 1 });
+    if (parsed) onChange(alpha ? parsed : { ...parsed, opacity: 1 });
     setDraft(null);
   }
 

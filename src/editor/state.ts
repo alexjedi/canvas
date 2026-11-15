@@ -1,9 +1,11 @@
+import { discardEmpty } from "../doc/create";
 import { ancestors } from "../doc/geometry";
 import { nodes } from "../doc/store";
-import { ROOT, type Rect } from "../doc/types";
+import { ROOT, type Point, type Rect } from "../doc/types";
+import { setHitSlop } from "../doc/vector";
 import { invalidate } from "../frame";
 
-export type ToolId = "move" | "scale" | "frame" | "rect" | "ellipse" | "hand";
+export type ToolId = "move" | "scale" | "frame" | "rect" | "ellipse" | "pen" | "text" | "hand";
 
 export interface Guide {
   x0: number;
@@ -21,6 +23,8 @@ export interface Camera {
 
 const EMPTY: readonly string[] = Object.freeze([]);
 const NO_GUIDES: readonly Guide[] = Object.freeze([]);
+const NO_POINTS: readonly number[] = Object.freeze([]);
+const HIT_REACH = 5;
 
 export const MIN_ZOOM = 0.02;
 export const MAX_ZOOM = 256;
@@ -39,12 +43,37 @@ export const editor = {
   eyedropper: null as ((color: string) => void) | null,
   expanded: new Set<string>(),
   drop: null as { id: string; position: DropPosition } | null,
+  editing: "",
+  points: NO_POINTS,
+  pen: null as Point | null,
 };
 
 const cameras = new Map<string, Camera>();
 
+export function setEditing(id: string) {
+  if (editor.editing === id) return;
+  const previous = editor.editing;
+  editor.editing = id;
+  editor.points = NO_POINTS;
+  editor.pen = null;
+  if (previous) discardEmpty(previous);
+  invalidate();
+}
+
+export function setPoints(points: readonly number[]) {
+  editor.points = points.length ? points : NO_POINTS;
+  invalidate();
+}
+
+export function setPen(point: Point | null) {
+  if (!point && !editor.pen) return;
+  editor.pen = point;
+  invalidate();
+}
+
 export function select(ids: readonly string[]) {
   const next = ids.filter((id, i) => nodes.has(id) && ids.indexOf(id) === i);
+  if (editor.editing && (next.length !== 1 || next[0] !== editor.editing)) setEditing("");
   if (next.length === editor.selection.length && next.every((id, i) => id === editor.selection[i])) return;
   editor.selection = next.length ? next : EMPTY;
   editor.selected = new Set(next);
@@ -61,6 +90,8 @@ export function setHover(id: string) {
 export function setTool(tool: ToolId) {
   if (editor.tool === tool) return;
   editor.tool = tool;
+  editor.pen = null;
+  if (tool !== "move" && tool !== "pen" && tool !== "hand") setEditing("");
   invalidate();
 }
 
@@ -101,6 +132,7 @@ export function setCamera(x: number, y: number, zoom: number) {
   const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
   if (next !== camera.zoom) camera.zoomedAt = performance.now();
   camera.zoom = next;
+  setHitSlop(HIT_REACH / next);
   camera.x = Math.round(x * viewport.dpr) / viewport.dpr;
   camera.y = Math.round(y * viewport.dpr) / viewport.dpr;
   invalidate();
@@ -123,6 +155,7 @@ export function sanitize() {
     editor.page = "";
     setPage(nodes.get(ROOT)?.children[0] ?? "");
   }
+  if (editor.editing && !nodes.has(editor.editing)) setEditing("");
   select(editor.selection.filter((id) => nodes.has(id)));
   if (editor.hover && !nodes.has(editor.hover)) editor.hover = "";
 }

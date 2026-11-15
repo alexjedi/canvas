@@ -1,5 +1,6 @@
 import { edit, moveNode, nodes } from "./store";
 import type { Point, Rect, SceneNode } from "./types";
+import { hitVector } from "./vector";
 
 export type Mat = Float64Array;
 
@@ -139,6 +140,10 @@ function hitChildren(parent: SceneNode, x: number, y: number, framesOnly: boolea
     if (node.children.length > 0 && (inside || !node.clip)) {
       const hit = hitChildren(node, lx, ly, framesOnly, exclude);
       if (hit) return hit;
+    }
+    if (node.kind === "vector") {
+      if (!framesOnly && hitVector(node, lx, ly)) return node;
+      continue;
     }
     if (!inside || isGroup) continue;
     if (node.kind !== "ellipse") return node;
