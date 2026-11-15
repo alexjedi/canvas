@@ -1,5 +1,5 @@
 import { insertNodes, loadNodes, nodes, removeNode, transact } from "./store";
-import { ROOT, type NodeKind, type Paint, type SceneNode } from "./types";
+import { ROOT, type NodeKind, type Paint, type SceneNode, type Stroke } from "./types";
 import { commitVector, pixelPaths, STRIDE } from "./vector";
 
 const LABELS: Record<NodeKind, string> = {
@@ -42,8 +42,13 @@ const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
   alignCross: "start",
   sizeX: "fixed",
   sizeY: "fixed",
+  wrap: false,
+  gapCross: 0,
+  absolute: false,
   paths: [],
+  evenOdd: false,
   text: "",
+  runs: [],
   fontFamily: "system-ui",
   fontSize: 16,
   fontWeight: 400,
@@ -55,6 +60,10 @@ const DEFAULTS: Omit<SceneNode, "id" | "kind"> = {
 };
 
 export const solid = (color: string): Paint => ({ color, opacity: 1, gradient: null });
+
+export const DEFAULT_STROKE: Stroke = { color: "#000000", opacity: 1, gradient: null, width: 1, align: "inside", cap: "butt", join: "miter" };
+
+export const centerStroke = (): Stroke => ({ ...DEFAULT_STROKE, align: "center" });
 
 function defaultFill(kind: NodeKind): Paint | null {
   if (kind === "frame") return solid("#ffffff");
@@ -73,7 +82,11 @@ export function nextName(kind: NodeKind): string {
   return `${LABELS[kind]} ${count}`;
 }
 
-export const normalizeNode = (node: SceneNode): SceneNode => ({ ...DEFAULTS, ...node });
+export const normalizeNode = (node: SceneNode): SceneNode => ({
+  ...DEFAULTS,
+  ...node,
+  stroke: node.stroke ? { ...DEFAULT_STROKE, ...node.stroke } : null,
+});
 
 export function createNode(kind: NodeKind, props: Partial<SceneNode> = {}): SceneNode {
   return {

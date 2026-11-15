@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
 import { nodes } from "../doc/store";
-import type { Gradient, NodeProps, Paint, SceneNode, Stroke } from "../doc/types";
-import { editor } from "../editor/state";
+import { rangeValue } from "../doc/text";
+import type { Gradient, NodeProps, Paint, SceneNode, Stroke, TextStyle } from "../doc/types";
+import { editor, rangeOf } from "../editor/state";
 import { subscribe } from "../frame";
 
 export const MIXED = Symbol("mixed");
@@ -32,6 +33,8 @@ function same(a: unknown, b: unknown): boolean {
     left.opacity === right.opacity &&
     left.width === right.width &&
     left.align === right.align &&
+    left.cap === right.cap &&
+    left.join === right.join &&
     sameGradient(left.gradient ?? null, right.gradient ?? null)
   );
 }
@@ -44,6 +47,23 @@ export function useSelected<K extends keyof NodeProps>(key: K): NodeProps[K] | M
     for (let i = 1; i < editor.selection.length; i++) {
       const node = nodes.get(editor.selection[i]);
       if (node && !same(node[key], value)) return MIXED;
+    }
+    return value;
+  });
+}
+
+export function useTextStyle<K extends keyof TextStyle>(key: K): TextStyle[K] | Mixed | undefined {
+  return useFrame(() => {
+    let found = false;
+    let value: TextStyle[K] | undefined;
+    for (const id of editor.selection) {
+      const node = nodes.get(id);
+      if (!node || node.kind !== "text") continue;
+      const range = rangeOf(node);
+      const read = rangeValue(node, key, range.start, range.end);
+      if (read.mixed || (found && !same(read.value, value))) return MIXED;
+      value = read.value;
+      found = true;
     }
     return value;
   });

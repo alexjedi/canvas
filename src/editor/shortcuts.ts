@@ -1,12 +1,12 @@
 import {
   addAutoLayout,
-  addImages,
+  addFiles,
   copySelection,
   deleteSelection,
   duplicateSelection,
   groupSelection,
   nudge,
-  pasteClipboard,
+  pasteContent,
   pickImages,
   redoAction,
   reorder,
@@ -77,9 +77,10 @@ function onCopy(event: ClipboardEvent) {
 function onPaste(event: ClipboardEvent) {
   if (isTyping(event.target)) return;
   event.preventDefault();
-  const files = Array.from(event.clipboardData?.files ?? []).filter((file) => file.type.startsWith("image/"));
-  if (files.length) void addImages(files);
-  else pasteClipboard();
+  const data = event.clipboardData;
+  const files = Array.from(data?.files ?? []).filter((file) => file.type.startsWith("image/"));
+  if (files.length) void addFiles(files);
+  else pasteContent(data?.getData("text/plain") ?? "", data?.getData("text/html") ?? "");
 }
 
 export function attachShortcuts() {

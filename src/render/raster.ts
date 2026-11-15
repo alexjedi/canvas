@@ -1,5 +1,5 @@
 import { getBitmap } from "../doc/assets";
-import { layoutText, type TextLayout } from "../doc/text";
+import { fontCss, layoutText, maxFontSize, type TextLayout } from "../doc/text";
 import type { Paint, SceneNode } from "../doc/types";
 import { tracePaths } from "../doc/vector";
 import { paintStyle, paintThrough, radialStretch, type Context, type Surface } from "./paint";
@@ -25,14 +25,14 @@ export const isFreeform = (node: SceneNode) => node.kind === "vector" || node.ki
 export function strokeOutset(node: SceneNode): number {
   const stroke = node.stroke;
   if (!stroke || stroke.width <= 0) return 0;
-  if (node.kind === "vector") return (stroke.width * VECTOR_MITER) / 2;
+  if (node.kind === "vector") return stroke.join === "miter" ? (stroke.width * VECTOR_MITER) / 2 : stroke.cap === "square" ? stroke.width * 0.75 : stroke.width / 2;
   if (node.kind === "text") return stroke.width / 2;
   return stroke.align === "outside" ? stroke.width : stroke.align === "center" ? stroke.width / 2 : 0;
 }
 
 const GLYPH_OVERHANG = 0.5;
 
-export const paintOutset = (node: SceneNode) => strokeOutset(node) + (node.kind === "text" ? node.fontSize * GLYPH_OVERHANG : 0);
+export const paintOutset = (node: SceneNode) => strokeOutset(node) + (node.kind === "text" ? maxFontSize(node) * GLYPH_OVERHANG : 0);
 
 export const strokeOffset = (node: SceneNode) => {
   const stroke = node.stroke;
@@ -92,13 +92,14 @@ function fillShape(ctx: Context, node: SceneNode, paint: Paint, alpha: number) {
   ctx.globalAlpha = alpha * paint.opacity;
   ctx.fillStyle = paintStyle(ctx, paint, node.width, node.height);
   tracePath(ctx, node);
+  const rule = node.kind === "vector" && node.evenOdd ? "evenodd" : "nonzero";
   if (stretch === 1) {
-    ctx.fill();
+    ctx.fill(rule);
     return;
   }
   ctx.save();
   ctx.scale(1, stretch);
-  ctx.fill();
+  ctx.fill(rule);
   ctx.restore();
 }
 
@@ -108,7 +109,34 @@ export function lineOrigin(node: SceneNode, layout: TextLayout, index: number): 
   return layout.align === "center" ? free / 2 : free;
 }
 
+function drawRich(target: Context, node: SceneNode, layout: TextLayout, alpha: number, outlined: boolean) {
+  const rich = layout.rich;
+  if (!rich) return;
+  target.textBaseline = "alphabetic";
+  target.textAlign = "left";
+  for (let i = 0; i < rich.length; i++) {
+    const origin = lineOrigin(node, layout, i);
+    for (const fragment of rich[i].fragments) {
+      const style = layout.runs[fragment.run];
+      target.font = fontCss(style);
+      target.letterSpacing = `${style.letterSpacing}px`;
+      if (outlined) {
+        target.strokeText(fragment.text, origin + fragment.x, rich[i].baseline);
+        continue;
+      }
+      if (!style.fill) continue;
+      target.globalAlpha = alpha * style.fill.opacity;
+      target.fillStyle = paintStyle(target, style.fill, node.width, node.height);
+      target.fillText(fragment.text, origin + fragment.x, rich[i].baseline);
+    }
+  }
+}
+
 function drawText(target: Context, node: SceneNode, layout: TextLayout, outlined: boolean) {
+  if (layout.rich) {
+    drawRich(target, node, layout, 1, true);
+    return;
+  }
   target.font = layout.font;
   target.letterSpacing = layout.spacing;
   target.textBaseline = "alphabetic";
@@ -124,7 +152,8 @@ function drawText(target: Context, node: SceneNode, layout: TextLayout, outlined
 function paintText(ctx: Context, node: SceneNode, alpha: number) {
   const { width, height, fill, stroke } = node;
   const layout = layoutText(node);
-  if (fill) paintThrough(ctx, fill, width, height, alpha, (target) => drawText(target, node, layout, false));
+  if (layout.rich) drawRich(ctx, node, layout, alpha, false);
+  else if (fill) paintThrough(ctx, fill, width, height, alpha, (target) => drawText(target, node, layout, false));
   if (!stroke || stroke.width <= 0) return;
   paintThrough(ctx, stroke, width, height, alpha, (target) => {
     target.lineWidth = stroke.width;
@@ -149,17 +178,19 @@ export function paintNode(ctx: Context, node: SceneNode, alpha = 1) {
   }
   paintThrough(ctx, stroke, width, height, alpha, (target) => {
     target.lineWidth = stroke.width;
-    target.lineJoin = "miter";
-    target.miterLimit = node.kind === "vector" ? VECTOR_MITER : DEFAULT_MITER;
+    const vector = node.kind === "vector";
+    target.lineJoin = vector ? stroke.join : "miter";
+    target.lineCap = vector ? stroke.cap : "butt";
+    target.miterLimit = vector ? VECTOR_MITER : DEFAULT_MITER;
     tracePath(target, node, offset);
     target.stroke();
   });
 }
 
 export function isPaintable(node: SceneNode): boolean {
+  if (node.kind === "text") return node.text !== "" && (!!node.fill || !!node.stroke || node.runs.length > 0);
   if (node.kind === "group" || (!node.fill && !node.stroke && node.kind !== "image")) return false;
   if (node.kind === "vector") return node.paths.length > 0;
-  if (node.kind === "text") return node.text !== "";
   return node.width > 0 && node.height > 0;
 }
 

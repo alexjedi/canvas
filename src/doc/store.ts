@@ -11,6 +11,7 @@ interface Entry {
 }
 
 export const nodes = new Map<string, SceneNode>();
+export const structure = { version: 0 };
 
 const HISTORY_LIMIT = 200;
 const MERGE_WINDOW = 600;
@@ -101,6 +102,7 @@ export function transact<T>(fn: () => T, mergeKey = ""): T {
 }
 
 function restore(map: Map<string, Snapshot>) {
+  structure.version++;
   for (const [id, snap] of map) {
     const node = nodes.get(id);
     if (!snap) {
@@ -159,6 +161,7 @@ export function setProps(id: string, props: Partial<NodeProps>) {
 export function insertNodes(list: SceneNode[], parentId: string, index = -1) {
   const root = list[0];
   if (!root) return;
+  structure.version++;
   begin();
   const parent = edit(parentId);
   if (parent) {
@@ -183,6 +186,7 @@ function drop(id: string) {
 export function removeNode(id: string) {
   const node = nodes.get(id);
   if (!node) return;
+  structure.version++;
   begin();
   const parent = edit(node.parent);
   if (parent) {
@@ -196,6 +200,7 @@ export function removeNode(id: string) {
 export function moveNode(id: string, parentId: string, index = -1) {
   const node = nodes.get(id);
   if (!node || !nodes.has(parentId)) return;
+  structure.version++;
   begin();
   const from = edit(node.parent);
   const to = edit(parentId);
@@ -212,6 +217,7 @@ export function moveNode(id: string, parentId: string, index = -1) {
 
 export function loadNodes(list: SceneNode[]) {
   nodes.clear();
+  structure.version++;
   for (const node of list) nodes.set(node.id, node);
   past.length = 0;
   future.length = 0;

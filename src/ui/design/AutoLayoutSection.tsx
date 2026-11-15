@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, StretchHorizontal } from "lucide-react";
+import { ArrowDown, ArrowRight, StretchHorizontal, StretchVertical } from "lucide-react";
 import type { CrossAlign, LayoutMode, MainAlign } from "../../doc/types";
 import { addAutoLayout, removeAutoLayout, setSelected } from "../../editor/actions";
 import { NumberField } from "../controls/NumberField";
@@ -6,6 +6,7 @@ import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
 import { Segmented } from "../controls/Segmented";
 import { Select } from "../controls/Select";
+import { Switch } from "../controls/Switch";
 import { MIXED, numberOf, useSelected } from "../hooks";
 import { PaintToggle } from "./PaintToggle";
 
@@ -44,10 +45,12 @@ export function AutoLayoutSection() {
   const gap = useSelected("gap");
   const alignMain = useSelected("alignMain");
   const alignCross = useSelected("alignCross");
+  const wrap = useSelected("wrap");
+  const gapCross = useSelected("gapCross");
   const present = layout === MIXED || (!!layout && layout !== "none");
 
   return (
-    <Section title="Auto layout" action={<PaintToggle label="auto layout" present={present} onAdd={addAutoLayout} onRemove={removeAutoLayout} />}>
+    <Section title="Auto layout" onOpen={present ? undefined : addAutoLayout} action={<PaintToggle label="auto layout" present={present} onAdd={addAutoLayout} onRemove={removeAutoLayout} />}>
       {present && (
         <>
           <Row>
@@ -58,6 +61,16 @@ export function AutoLayoutSection() {
             <Select value={alignMain === MIXED || !alignMain ? null : alignMain} options={MAIN} onChange={(value) => setSelected("alignMain", value)} />
             <Select value={alignCross === MIXED || !alignCross ? null : alignCross} options={CROSS} onChange={(value) => setSelected("alignCross", value)} />
           </Row>
+          <Switch label="Wrap" checked={wrap === true} onChange={(value) => setSelected("wrap", value)} />
+          {wrap === true && (
+            <NumberField
+              label={<StretchVertical size={12} />}
+              name="Line gap"
+              min={0}
+              value={numberOf(gapCross)}
+              onChange={(value) => setSelected("gapCross", value, "gapCross")}
+            />
+          )}
           <Row>
             {PADDING.map(([side, label, name]) => (
               <PaddingField key={side} side={side} label={label} name={name} />

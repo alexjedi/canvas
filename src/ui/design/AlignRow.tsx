@@ -17,29 +17,29 @@ export function AlignRow() {
   const spreadable = useFrame(() => editor.selection.length > 2);
 
   return (
-    <div className="flex items-center justify-between">
-      <IconButton tip="Align left" className="size-7" onClick={() => alignSelection("left")}>
+    <div className="grid grid-cols-4 gap-1">
+      <IconButton tip="Align left" className="h-7 w-full" onClick={() => alignSelection("left")}>
         <AlignStartVertical size={12} />
       </IconButton>
-      <IconButton tip="Align horizontal centres" className="size-7" onClick={() => alignSelection("center")}>
+      <IconButton tip="Align horizontal centres" className="h-7 w-full" onClick={() => alignSelection("center")}>
         <AlignCenterVertical size={12} />
       </IconButton>
-      <IconButton tip="Align right" className="size-7" onClick={() => alignSelection("right")}>
+      <IconButton tip="Align right" className="h-7 w-full" onClick={() => alignSelection("right")}>
         <AlignEndVertical size={12} />
       </IconButton>
-      <IconButton tip="Align top" className="size-7" onClick={() => alignSelection("top")}>
-        <AlignStartHorizontal size={12} />
-      </IconButton>
-      <IconButton tip="Align vertical centres" className="size-7" onClick={() => alignSelection("middle")}>
-        <AlignCenterHorizontal size={12} />
-      </IconButton>
-      <IconButton tip="Align bottom" className="size-7" onClick={() => alignSelection("bottom")}>
-        <AlignEndHorizontal size={12} />
-      </IconButton>
-      <IconButton tip="Distribute horizontally" className="size-7" disabled={!spreadable} onClick={() => distributeSelection("horizontal")}>
+      <IconButton tip="Distribute horizontally" className="h-7 w-full" disabled={!spreadable} onClick={() => distributeSelection("horizontal")}>
         <AlignHorizontalDistributeCenter size={12} />
       </IconButton>
-      <IconButton tip="Distribute vertically" className="size-7" disabled={!spreadable} onClick={() => distributeSelection("vertical")}>
+      <IconButton tip="Align top" className="h-7 w-full" onClick={() => alignSelection("top")}>
+        <AlignStartHorizontal size={12} />
+      </IconButton>
+      <IconButton tip="Align vertical centres" className="h-7 w-full" onClick={() => alignSelection("middle")}>
+        <AlignCenterHorizontal size={12} />
+      </IconButton>
+      <IconButton tip="Align bottom" className="h-7 w-full" onClick={() => alignSelection("bottom")}>
+        <AlignEndHorizontal size={12} />
+      </IconButton>
+      <IconButton tip="Distribute vertically" className="h-7 w-full" disabled={!spreadable} onClick={() => distributeSelection("vertical")}>
         <AlignVerticalDistributeCenter size={12} />
       </IconButton>
     </div>

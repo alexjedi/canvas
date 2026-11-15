@@ -5,8 +5,8 @@ import {
   deleteSelection,
   duplicateSelection,
   groupSelection,
-  hasClipboard,
-  pasteClipboard,
+  copyAsSvg,
+  pasteFromSystem,
   reorder,
   toggleSelected,
   ungroupSelection,
@@ -24,7 +24,8 @@ export function MenuItems() {
   return (
     <>
       <MenuItem label="Copy" hint="⌘C" disabled={empty} onSelect={copyToSystem} />
-      <MenuItem label="Paste" hint="⌘V" disabled={!hasClipboard()} onSelect={pasteClipboard} />
+      <MenuItem label="Copy as SVG" disabled={empty} onSelect={copyAsSvg} />
+      <MenuItem label="Paste" hint="⌘V" onSelect={pasteFromSystem} />
       <MenuItem label="Duplicate" hint="⌘D" disabled={empty} onSelect={duplicateSelection} />
       <MenuItem label="Delete" hint="⌫" disabled={empty} onSelect={deleteSelection} />
       <MenuSeparator />

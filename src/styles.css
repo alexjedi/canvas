@@ -55,6 +55,11 @@
 }
 
 @layer base {
+  ::selection {
+    background: color-mix(in oklch, var(--color-bl) 32%, transparent);
+    color: inherit;
+  }
+
   :focus-visible {
     outline: 2px solid color-mix(in oklch, var(--color-bl) 70%, transparent);
     outline-offset: 1px;

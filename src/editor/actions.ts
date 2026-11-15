@@ -1,18 +1,22 @@
 import { importImage } from "../doc/assets";
+import { extractSvg, importSvg } from "../doc/svg";
+import { layoutText, spliceRuns, styleRange } from "../doc/text";
+import { svgMarkup } from "../render/export";
 import { addPage, cloneNodes, collectSubtree, createNode, nextName } from "../doc/create";
-import { commitVector, removePoints, shapePaths } from "../doc/vector";
+import { commitVector, isSmooth, locatePoint, pixelPaths, removePoints, shapePaths, STRIDE, toggleSmooth } from "../doc/vector";
 import { apply, frameAt, invert, isContainer, mat, reparent, setWorld, sortByOrder, topLevel, translateWorld, unionBounds, worldBounds } from "../doc/geometry";
 import { resizeNode } from "../doc/groups";
 import { inferLayout, isLayout } from "../doc/layout";
 import { canRedo, canUndo, edit, insertNodes, moveNode, nodes, redo, removeNode, setProps, transact, undo } from "../doc/store";
-import { ROOT, type NodeProps, type Point, type SceneNode, type TextSizing } from "../doc/types";
+import { ROOT, type NodeProps, type Paint, type Point, type SceneNode, type TextSizing, type TextStyle, type VectorPath } from "../doc/types";
 import { grid } from "./prefs";
-import { camera, editor, sanitize, select, setCamera, setEditing, setPage, setPoints, setTool, toWorld, viewport, type DropPosition } from "./state";
+import { camera, editor, rangeOf, sanitize, select, setCamera, setEditing, setPage, setPoints, setTool, toWorld, viewport, type DropPosition } from "./state";
 
 const FIT_PADDING = 64;
 const DUPLICATE_GAP = 100;
 
 let clipboard: SceneNode[][] = [];
+let copiedText = "";
 
 const roots = () => sortByOrder(topLevel(editor.selection), editor.page);
 
@@ -28,9 +32,17 @@ export function redoAction() {
   sanitize();
 }
 
+function fillProps(node: SceneNode, fill: Paint | null): Partial<NodeProps> {
+  return node.kind === "text" && node.runs.length > 0 ? styleRange(node, 0, node.text.length, () => ({ fill })) : { fill };
+}
+
 export function setSelected<K extends keyof NodeProps>(key: K, value: NodeProps[K], mergeKey = "") {
   transact(() => {
-    for (const id of editor.selection) setProps(id, { [key]: value } as Partial<NodeProps>);
+    for (const id of editor.selection) {
+      const node = nodes.get(id);
+      if (!node) continue;
+      setProps(id, key === "fill" ? fillProps(node, value as Paint | null) : ({ [key]: value } as Partial<NodeProps>));
+    }
   }, mergeKey && `${mergeKey}:${editor.selection.join()}`);
 }
 
@@ -38,7 +50,9 @@ export function patchSelected<K extends "fill" | "stroke">(key: K, patch: Partia
   transact(() => {
     for (const id of editor.selection) {
       const node = nodes.get(id);
-      if (node) setProps(id, { [key]: { ...(node[key] ?? fallback), ...patch } } as Partial<NodeProps>);
+      if (!node) continue;
+      const next = { ...(node[key] ?? fallback), ...patch };
+      setProps(id, key === "fill" ? fillProps(node, next) : ({ [key]: next } as Partial<NodeProps>));
     }
   }, `${key}:${editor.selection.join()}`);
 }
@@ -61,6 +75,37 @@ export function startEditing(id: string) {
   }
   select([id]);
   setEditing(id);
+}
+
+function editPoints(change: (paths: VectorPath[], path: number, index: number) => void, mergeKey = "") {
+  const node = nodes.get(editor.editing);
+  if (!node || node.kind !== "vector" || editor.points.length === 0) return;
+  const paths = pixelPaths(node);
+  for (const global of editor.points) {
+    const [path, index] = locatePoint(paths, global);
+    if (path >= 0) change(paths, path, index);
+  }
+  transact(() => commitVector(node.id, paths, node.x, node.y), mergeKey && `${mergeKey}:${node.id}:${editor.points.join()}`);
+}
+
+export function movePointTo(axis: 0 | 1, value: number) {
+  const node = nodes.get(editor.editing);
+  if (!node) return;
+  const origin = axis === 0 ? node.x : node.y;
+  editPoints((paths, path, index) => {
+    const p = paths[path].points;
+    const o = index * STRIDE + axis;
+    const delta = value - origin - p[o];
+    p[o] += delta;
+    p[o + 2] += delta;
+    p[o + 4] += delta;
+  }, `point${axis}`);
+}
+
+export function setPointsSmooth(smooth: boolean) {
+  editPoints((paths, path, index) => {
+    if (isSmooth(paths[path], index) !== smooth) toggleSmooth(paths[path], index);
+  });
 }
 
 export function stopEditing() {
@@ -110,7 +155,8 @@ export function copySelection(): string {
   const ids = roots();
   if (!ids.length) return "";
   clipboard = ids.map(snapshotTree);
-  return ids.map((id) => nodes.get(id)?.name ?? "").join("\n");
+  copiedText = ids.map((id) => nodes.get(id)?.name ?? "").join("\n");
+  return copiedText;
 }
 
 export function copyToSystem() {
@@ -118,7 +164,81 @@ export function copyToSystem() {
   if (text) navigator.clipboard?.writeText(text).catch(() => {});
 }
 
-export const hasClipboard = () => clipboard.length > 0;
+export function copyAsSvg() {
+  const ids = roots();
+  if (!ids.length || !navigator.clipboard) return;
+  const markup = svgMarkup(ids);
+  if (typeof ClipboardItem === "undefined") {
+    void markup.then((text) => navigator.clipboard.writeText(text)).catch(() => {});
+    return;
+  }
+  const item = new ClipboardItem({ "text/plain": markup.then((text) => new Blob([text], { type: "text/plain" })) });
+  navigator.clipboard.write([item]).catch(() => {});
+}
+
+function placeAt(list: SceneNode[], at?: Point): string {
+  const centre = at ?? toWorld(viewport.width / 2, viewport.height / 2);
+  const container = frameAt(editor.page, centre.x, centre.y);
+  const local = apply(invert(mat(), setWorld(mat(), container ?? undefined)), centre.x, centre.y);
+  const top = list[0];
+  top.x = grid(local.x - top.width / 2);
+  top.y = grid(local.y - top.height / 2);
+  insertNodes(list, container?.id ?? editor.page);
+  return top.id;
+}
+
+export function pasteSvg(markup: string, at?: Point): boolean {
+  const list = importSvg(markup);
+  if (list.length === 0) return false;
+  select([transact(() => placeAt(list, at))]);
+  return true;
+}
+
+export function pasteText(text: string) {
+  const node = createNode("text", { name: nextName("text"), text });
+  const layout = layoutText(node);
+  node.width = layout.width;
+  node.height = layout.height;
+  select([transact(() => placeAt([node]))]);
+}
+
+export function pasteContent(text: string, html: string) {
+  const markup = extractSvg(text) || extractSvg(html);
+  if (markup && pasteSvg(markup)) return;
+  const plain = text.replace(/\r\n?/g, "\n");
+  if (clipboard.length > 0 && (plain === copiedText || plain.trim() === "")) pasteClipboard();
+  else if (plain.trim() !== "") pasteText(plain);
+}
+
+export async function addFiles(files: Iterable<File>, at?: Point) {
+  const images: File[] = [];
+  for (const file of files) {
+    if (file.type === "image/svg+xml" && pasteSvg(extractSvg(await file.text()), at)) continue;
+    images.push(file);
+  }
+  if (images.length > 0) await addImages(images, at);
+}
+
+export async function pasteFromSystem() {
+  try {
+    const items = await navigator.clipboard.read();
+    const files: File[] = [];
+    let text = "";
+    let html = "";
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith("image/")) files.push(new File([await item.getType(type)], "Image", { type }));
+        else if (type === "text/plain") text = await (await item.getType(type)).text();
+        else if (type === "text/html") html = await (await item.getType(type)).text();
+      }
+    }
+    if (files.length > 0) await addFiles(files);
+    else if (text || html) pasteContent(text, html);
+    else pasteClipboard();
+  } catch {
+    pasteClipboard();
+  }
+}
 
 export function pasteClipboard() {
   if (!clipboard.length) return;
@@ -347,6 +467,24 @@ export function resizeSelected(key: "width" | "height", value: number) {
   }, `${key}:${editor.selection.join()}`);
 }
 
+export function styleText(change: Partial<TextStyle> | ((style: TextStyle) => Partial<TextStyle>), mergeKey = "") {
+  const apply = typeof change === "function" ? change : () => change;
+  transact(() => {
+    for (const id of editor.selection) {
+      const node = nodes.get(id);
+      if (!node || node.kind !== "text") continue;
+      const range = rangeOf(node);
+      setProps(id, styleRange(node, range.start, range.end, apply));
+    }
+  }, mergeKey && `${mergeKey}:${editor.selection.join()}`);
+}
+
+export function editText(id: string, text: string, start: number, removed: number, inserted: number) {
+  const node = nodes.get(id);
+  if (!node || node.text === text) return;
+  transact(() => setProps(id, { text, ...spliceRuns(node, start, removed, inserted) }), `text:${id}`);
+}
+
 export function setTextSizing(sizing: TextSizing) {
   const props: Partial<NodeProps> =
     sizing === "width" ? { textSizing: sizing, sizeX: "fixed", sizeY: "fixed" } : sizing === "height" ? { textSizing: sizing, sizeY: "fixed" } : { textSizing: sizing };
@@ -390,7 +528,7 @@ export function pickImages() {
   input.type = "file";
   input.accept = "image/*";
   input.multiple = true;
-  input.onchange = () => input.files && void addImages(Array.from(input.files));
+  input.onchange = () => input.files && void addFiles(Array.from(input.files));
   input.click();
 }
 

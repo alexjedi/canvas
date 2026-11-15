@@ -1,5 +1,6 @@
 import { Blend, Minus as Weight } from "lucide-react";
-import type { SceneNode, Stroke, StrokeAlign } from "../../doc/types";
+import { DEFAULT_STROKE } from "../../doc/create";
+import type { SceneNode, Stroke, StrokeAlign, StrokeCap, StrokeJoin } from "../../doc/types";
 import { patchSelected, setSelected } from "../../editor/actions";
 import { ColorField } from "../controls/ColorField";
 import { NumberField } from "../controls/NumberField";
@@ -9,8 +10,6 @@ import { Select } from "../controls/Select";
 import { MIXED, paintOf, useSelected, useSelectionEvery } from "../hooks";
 import { PaintToggle } from "./PaintToggle";
 
-const DEFAULT_STROKE: Stroke = { color: "#000000", opacity: 1, gradient: null, width: 1, align: "inside" };
-
 const isFreeform = (node: SceneNode) => node.kind === "vector" || node.kind === "text";
 
 const ALIGNMENTS: Array<{ value: StrokeAlign; label: string }> = [
@@ -19,16 +18,32 @@ const ALIGNMENTS: Array<{ value: StrokeAlign; label: string }> = [
   { value: "outside", label: "Outside" },
 ];
 
+const CAPS: Array<{ value: StrokeCap; label: string }> = [
+  { value: "butt", label: "Flat ends" },
+  { value: "round", label: "Round ends" },
+  { value: "square", label: "Square ends" },
+];
+
+const JOINS: Array<{ value: StrokeJoin; label: string }> = [
+  { value: "miter", label: "Sharp joins" },
+  { value: "round", label: "Round joins" },
+  { value: "bevel", label: "Bevel joins" },
+];
+
+const isVector = (node: SceneNode) => node.kind === "vector";
+
 export function StrokeSection() {
   const value = useSelected("stroke");
   const stroke = paintOf(value);
   const present = value === MIXED || !!value;
   const freeform = useSelectionEvery(isFreeform);
+  const vectors = useSelectionEvery(isVector);
   const update = (patch: Partial<Stroke>) => patchSelected("stroke", patch, DEFAULT_STROKE);
 
   return (
     <Section
       title="Stroke"
+      onOpen={present ? undefined : () => setSelected("stroke", DEFAULT_STROKE)}
       action={<PaintToggle label="stroke" present={present} onAdd={() => setSelected("stroke", DEFAULT_STROKE)} onRemove={() => setSelected("stroke", null)} />}
     >
       {present && (
@@ -49,6 +64,12 @@ export function StrokeSection() {
             <NumberField label={<Weight size={12} />} name="Stroke width" min={0} value={stroke?.width ?? null} onChange={(width) => update({ width })} />
             {!freeform && <Select value={stroke?.align ?? null} options={ALIGNMENTS} onChange={(align) => update({ align })} />}
           </Row>
+          {vectors && (
+            <Row>
+              <Select value={stroke?.cap ?? null} options={CAPS} onChange={(cap) => update({ cap })} />
+              <Select value={stroke?.join ?? null} options={JOINS} onChange={(join) => update({ join })} />
+            </Row>
+          )}
         </>
       )}
     </Section>

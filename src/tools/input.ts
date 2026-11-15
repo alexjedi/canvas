@@ -1,6 +1,6 @@
 import { ancestors, hitTest } from "../doc/geometry";
 import { flushDirty } from "../doc/store";
-import { addImages, fitIfNeeded, zoomAt } from "../editor/actions";
+import { addFiles, fitIfNeeded, zoomAt } from "../editor/actions";
 import { nodes } from "../doc/store";
 import { camera, editor, select, setCamera, setEyedropper, toWorld, viewport, type ToolId } from "../editor/state";
 import { pickColor } from "../render/sample";
@@ -33,6 +33,8 @@ const TOOLS: Record<ToolId, Tool> = {
 const pointsTool = createPointsTool();
 
 const ZOOM_SPEED = 0.01;
+const DOUBLE_CLICK_MS = 400;
+const DOUBLE_CLICK_REACH = 6;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform);
 
 export function attachInput(canvas: HTMLCanvasElement) {
@@ -40,6 +42,10 @@ export function attachInput(canvas: HTMLCanvasElement) {
   let space = false;
   let gestureZoom = 1;
   let lastTool = editor.tool;
+  let clicks = 0;
+  let clickTime = 0;
+  let clickX = 0;
+  let clickY = 0;
 
   const current = () => {
     if (space) return handTool;
@@ -59,7 +65,7 @@ export function attachInput(canvas: HTMLCanvasElement) {
       shift: event.shiftKey,
       alt: event.altKey,
       meta: event.metaKey || (event.ctrlKey && !IS_MAC),
-      clicks: event.detail,
+      clicks,
     };
   }
 
@@ -92,6 +98,11 @@ export function attachInput(canvas: HTMLCanvasElement) {
       return;
     }
     if (event.button !== 0 && event.button !== 1) return;
+    const repeated = event.timeStamp - clickTime < DOUBLE_CLICK_MS && Math.hypot(event.clientX - clickX, event.clientY - clickY) < DOUBLE_CLICK_REACH;
+    clicks = repeated ? clicks + 1 : 1;
+    clickTime = event.timeStamp;
+    clickX = event.clientX;
+    clickY = event.clientY;
     if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
     canvas.setPointerCapture(event.pointerId);
     active = event.button === 1 ? handTool : current();
@@ -155,7 +166,7 @@ export function attachInput(canvas: HTMLCanvasElement) {
     if (files.length === 0) return;
     event.preventDefault();
     const pointer = pointerOf(event);
-    void addImages(files, { x: pointer.x, y: pointer.y });
+    void addFiles(files, { x: pointer.x, y: pointer.y });
   }
 
   function isTyping(event: KeyboardEvent) {

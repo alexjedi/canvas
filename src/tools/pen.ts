@@ -1,4 +1,4 @@
-import { createNode, nextName } from "../doc/create";
+import { centerStroke, createNode, nextName } from "../doc/create";
 import { apply, frameAt, invert, mat, setWorld } from "../doc/geometry";
 import { abort, begin, end, insertNodes, nodes } from "../doc/store";
 import type { SceneNode, VectorPath } from "../doc/types";
@@ -37,7 +37,7 @@ export function createPenTool(): Tool {
       x: origin.x,
       y: origin.y,
       paths: [{ closed: false, points: [0, 0, 0, 0, 0, 0] }],
-      stroke: { color: "#000000", opacity: 1, gradient: null, width: 1, align: "center" },
+      stroke: centerStroke(),
     });
     insertNodes([node], parent?.id ?? editor.page);
     select([node.id]);

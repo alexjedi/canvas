@@ -5,6 +5,8 @@ export type MainAlign = "start" | "center" | "end" | "between";
 export type CrossAlign = "start" | "center" | "end";
 export type ImageFit = "cover" | "contain" | "stretch" | "tile";
 export type StrokeAlign = "inside" | "center" | "outside";
+export type StrokeCap = "butt" | "round" | "square";
+export type StrokeJoin = "miter" | "round" | "bevel";
 
 export type TextAlign = "left" | "center" | "right";
 export type TextSizing = "width" | "height" | "fixed";
@@ -36,6 +38,20 @@ export interface VectorPath {
 export interface Stroke extends Paint {
   width: number;
   align: StrokeAlign;
+  cap: StrokeCap;
+  join: StrokeJoin;
+}
+
+export interface TextStyle {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  letterSpacing: number;
+  fill: Paint | null;
+}
+
+export interface TextRun extends TextStyle {
+  length: number;
 }
 
 export interface SceneNode {
@@ -68,8 +84,13 @@ export interface SceneNode {
   alignCross: CrossAlign;
   sizeX: Sizing;
   sizeY: Sizing;
+  wrap: boolean;
+  gapCross: number;
+  absolute: boolean;
   paths: VectorPath[];
+  evenOdd: boolean;
   text: string;
+  runs: TextRun[];
   fontFamily: string;
   fontSize: number;
   fontWeight: number;

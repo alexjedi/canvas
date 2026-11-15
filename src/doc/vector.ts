@@ -111,15 +111,21 @@ export function pixelPaths(node: SceneNode): VectorPath[] {
   });
 }
 
-export function commitVector(id: string, pixels: readonly VectorPath[], baseX: number, baseY: number) {
-  const node = edit(id);
-  if (!node) return;
+export interface FittedPaths {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  paths: VectorPath[];
+}
+
+export function fitPaths(pixels: readonly VectorPath[]): FittedPaths {
   measure(pixels);
   const minX = bounds[0];
   const minY = bounds[1];
   const width = bounds[2] - minX;
   const height = bounds[3] - minY;
-  node.paths = pixels.map((path) => {
+  const paths = pixels.map((path) => {
     const points = path.points.slice();
     for (let i = 0; i < points.length; i += 2) {
       points[i] = width > 0 ? (points[i] - minX) / width : 0;
@@ -127,12 +133,20 @@ export function commitVector(id: string, pixels: readonly VectorPath[], baseX: n
     }
     return { closed: path.closed, points };
   });
+  return { x: minX, y: minY, width, height, paths };
+}
+
+export function commitVector(id: string, pixels: readonly VectorPath[], baseX: number, baseY: number) {
+  const node = edit(id);
+  if (!node) return;
+  const fitted = fitPaths(pixels);
+  node.paths = fitted.paths;
   const cos = Math.cos(node.rotation * RAD);
   const sin = Math.sin(node.rotation * RAD);
-  node.x = baseX + cos * minX - sin * minY;
-  node.y = baseY + sin * minX + cos * minY;
-  node.width = width;
-  node.height = height;
+  node.x = baseX + cos * fitted.x - sin * fitted.y;
+  node.y = baseY + sin * fitted.x + cos * fitted.y;
+  node.width = fitted.width;
+  node.height = fitted.height;
 }
 
 export function shapePaths(node: SceneNode): VectorPath[] {
@@ -223,13 +237,19 @@ export function nearestSegment(paths: readonly VectorPath[], x: number, y: numbe
   return best;
 }
 
+export function isSmooth(path: VectorPath, index: number): boolean {
+  const p = path.points;
+  const o = index * STRIDE;
+  return p[o + 2] !== p[o] || p[o + 3] !== p[o + 1] || p[o + 4] !== p[o] || p[o + 5] !== p[o + 1];
+}
+
 export function toggleSmooth(path: VectorPath, index: number) {
   const p = path.points;
   const count = p.length / STRIDE;
   const o = index * STRIDE;
   const ax = p[o];
   const ay = p[o + 1];
-  if (p[o + 2] !== ax || p[o + 3] !== ay || p[o + 4] !== ax || p[o + 5] !== ay) {
+  if (isSmooth(path, index)) {
     p[o + 2] = p[o + 4] = ax;
     p[o + 3] = p[o + 5] = ay;
     return;
@@ -301,7 +321,7 @@ export function hitVector(node: SceneNode, x: number, y: number): boolean {
   probe ??= document.createElement("canvas").getContext("2d");
   if (!probe) return true;
   const path = outlineOf(node);
-  if (node.fill && probe.isPointInPath(path, x, y)) return true;
+  if (node.fill && probe.isPointInPath(path, x, y, node.evenOdd ? "evenodd" : "nonzero")) return true;
   probe.lineWidth = reach * 2;
   return probe.isPointInStroke(path, x, y);
 }

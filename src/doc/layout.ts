@@ -36,63 +36,105 @@ function assign(node: SceneNode, key: "x" | "y" | "width" | "height", value: num
   if (target) target[key] = value;
 }
 
+export const inFlow = (node: SceneNode | null | undefined): boolean => !!node && !node.absolute && isLayout(nodes.get(node.parent));
+
+function breakLines(frame: SceneNode, items: SceneNode[], row: boolean, innerMain: number, fillsMain: (item: SceneNode) => boolean): SceneNode[][] {
+  if (!frame.wrap) return [items];
+  const lines: SceneNode[][] = [];
+  let line: SceneNode[] = [];
+  let used = 0;
+  for (const item of items) {
+    measure(item);
+    const size = fillsMain(item) ? 0 : row ? box.width : box.height;
+    if (line.length > 0 && used + frame.gap + size > innerMain + EPSILON) {
+      lines.push(line);
+      line = [];
+      used = 0;
+    }
+    used += (line.length > 0 ? frame.gap : 0) + size;
+    line.push(item);
+  }
+  if (line.length > 0 || lines.length === 0) lines.push(line);
+  return lines;
+}
+
 export function layoutFrame(frame: SceneNode) {
   const row = frame.layout === "row";
   const items: SceneNode[] = [];
   for (const id of frame.children) {
     const child = nodes.get(id);
-    if (child && child.visible) items.push(child);
+    if (child && child.visible && !child.absolute) items.push(child);
   }
   const mainStart = row ? frame.paddingLeft : frame.paddingTop;
   const mainEnd = row ? frame.paddingRight : frame.paddingBottom;
   const crossStart = row ? frame.paddingTop : frame.paddingLeft;
   const crossEnd = row ? frame.paddingBottom : frame.paddingRight;
-  const hugMain = (row ? frame.sizeX : frame.sizeY) === "hug";
+  const hugMain = !frame.wrap && (row ? frame.sizeX : frame.sizeY) === "hug";
   const hugCross = (row ? frame.sizeY : frame.sizeX) === "hug";
   const fillsMain = (item: SceneNode) => !hugMain && canFill(item) && (row ? item.sizeX : item.sizeY) === "fill";
   const fillsCross = (item: SceneNode) => canFill(item) && (row ? item.sizeY : item.sizeX) === "fill";
+  const fixedMain = (row ? frame.width : frame.height) - mainStart - mainEnd;
+  const lines = breakLines(frame, items, row, fixedMain, fillsMain);
 
-  let fixedTotal = 0;
-  let fillCount = 0;
-  let maxCross = 0;
-  let anyCross = false;
-  for (const item of items) {
-    measure(item);
-    if (fillsMain(item)) fillCount++;
-    else fixedTotal += row ? box.width : box.height;
-    if (!fillsCross(item)) {
-      maxCross = Math.max(maxCross, row ? box.height : box.width);
-      anyCross = true;
+  const lineFixed: number[] = [];
+  const lineFills: number[] = [];
+  const lineCross: number[] = [];
+  let crossTotal = 0;
+  for (const line of lines) {
+    let fixedTotal = 0;
+    let fillCount = 0;
+    let maxCross = 0;
+    let anyCross = false;
+    for (const item of line) {
+      measure(item);
+      if (fillsMain(item)) fillCount++;
+      else fixedTotal += row ? box.width : box.height;
+      if (!fillsCross(item)) {
+        maxCross = Math.max(maxCross, row ? box.height : box.width);
+        anyCross = true;
+      }
     }
+    if (!anyCross) for (const item of line) maxCross = Math.max(maxCross, row ? item.height : item.width);
+    lineFixed.push(fixedTotal);
+    lineFills.push(fillCount);
+    lineCross.push(maxCross);
+    crossTotal += maxCross;
   }
-  if (!anyCross) for (const item of items) maxCross = Math.max(maxCross, row ? item.height : item.width);
+  crossTotal += frame.gapCross * Math.max(0, lines.length - 1);
 
-  const gaps = frame.gap * Math.max(0, items.length - 1);
-  const frameMain = hugMain ? mainStart + fixedTotal + gaps + mainEnd : row ? frame.width : frame.height;
-  const frameCross = hugCross ? crossStart + maxCross + crossEnd : row ? frame.height : frame.width;
+  const single = lines.length === 1 && !frame.wrap;
+  const firstGaps = frame.gap * Math.max(0, lines[0].length - 1);
+  const frameMain = hugMain ? mainStart + lineFixed[0] + firstGaps + mainEnd : row ? frame.width : frame.height;
+  const frameCross = hugCross ? crossStart + crossTotal + crossEnd : row ? frame.height : frame.width;
   const innerMain = frameMain - mainStart - mainEnd;
   const innerCross = Math.max(0, frameCross - crossStart - crossEnd);
-  const fillSize = fillCount > 0 ? Math.max(0, (innerMain - fixedTotal - gaps) / fillCount) : 0;
-  const free = fillCount > 0 ? 0 : innerMain - fixedTotal - gaps;
 
-  let cursor = mainStart;
-  let spacing = frame.gap;
-  if (frame.alignMain === "center") cursor += free / 2;
-  else if (frame.alignMain === "end") cursor += free;
-  else if (frame.alignMain === "between" && items.length > 1) spacing += free / (items.length - 1);
-
-  for (const item of items) {
-    if (fillsMain(item)) assign(item, row ? "width" : "height", fillSize);
-    if (fillsCross(item)) assign(item, row ? "height" : "width", innerCross);
-    measure(item);
-    const mainSize = row ? box.width : box.height;
-    const crossSize = row ? box.height : box.width;
-    const crossOffset = frame.alignCross === "center" ? (innerCross - crossSize) / 2 : frame.alignCross === "end" ? innerCross - crossSize : 0;
-    const main = cursor;
-    const cross = crossStart + crossOffset;
-    assign(item, "x", (row ? main : cross) - box.offsetX);
-    assign(item, "y", (row ? cross : main) - box.offsetY);
-    cursor += mainSize + spacing;
+  let crossCursor = crossStart;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const gaps = frame.gap * Math.max(0, line.length - 1);
+    const fillCount = lineFills[index];
+    const fillSize = fillCount > 0 ? Math.max(0, (innerMain - lineFixed[index] - gaps) / fillCount) : 0;
+    const free = fillCount > 0 ? 0 : innerMain - lineFixed[index] - gaps;
+    const band = single ? innerCross : lineCross[index];
+    let cursor = mainStart;
+    let spacing = frame.gap;
+    if (frame.alignMain === "center") cursor += free / 2;
+    else if (frame.alignMain === "end") cursor += free;
+    else if (frame.alignMain === "between" && line.length > 1) spacing += free / (line.length - 1);
+    for (const item of line) {
+      if (fillsMain(item)) assign(item, row ? "width" : "height", fillSize);
+      if (fillsCross(item)) assign(item, row ? "height" : "width", band);
+      measure(item);
+      const mainSize = row ? box.width : box.height;
+      const crossSize = row ? box.height : box.width;
+      const crossOffset = frame.alignCross === "center" ? (band - crossSize) / 2 : frame.alignCross === "end" ? band - crossSize : 0;
+      const cross = crossCursor + crossOffset;
+      assign(item, "x", (row ? cursor : cross) - box.offsetX);
+      assign(item, "y", (row ? cross : cursor) - box.offsetY);
+      cursor += mainSize + spacing;
+    }
+    crossCursor += band + frame.gapCross;
   }
   assign(frame, row ? "width" : "height", Math.max(0, frameMain));
   assign(frame, row ? "height" : "width", Math.max(0, frameCross));
@@ -101,13 +143,19 @@ export function layoutFrame(frame: SceneNode) {
 export function placeInLayout(node: SceneNode, frame: SceneNode, localX: number, localY: number, moving: ReadonlySet<string>) {
   const row = frame.layout === "row";
   const along = row ? localX : localY;
+  const across = row ? localY : localX;
   let before = "";
   for (const id of frame.children) {
     const sibling = nodes.get(id);
-    if (!sibling || !sibling.visible || moving.has(id)) continue;
+    if (!sibling || !sibling.visible || sibling.absolute || moving.has(id)) continue;
     measure(sibling);
-    const centre = row ? sibling.x + box.offsetX + box.width / 2 : sibling.y + box.offsetY + box.height / 2;
-    if (along < centre) {
+    const mainOrigin = row ? sibling.x + box.offsetX : sibling.y + box.offsetY;
+    const crossOrigin = row ? sibling.y + box.offsetY : sibling.x + box.offsetX;
+    const mainSize = row ? box.width : box.height;
+    const crossSize = row ? box.height : box.width;
+    const above = frame.wrap && across < crossOrigin - frame.gapCross / 2;
+    const level = !frame.wrap || across < crossOrigin + crossSize + frame.gapCross / 2;
+    if (above || (level && along < mainOrigin + mainSize / 2)) {
       before = id;
       break;
     }
@@ -119,7 +167,7 @@ export function placeInLayout(node: SceneNode, frame: SceneNode, localX: number,
 }
 
 export function inferLayout(frame: SceneNode): Partial<SceneNode> {
-  const items = frame.children.map((id) => nodes.get(id)).filter((child): child is SceneNode => !!child && child.visible);
+  const items = frame.children.map((id) => nodes.get(id)).filter((child): child is SceneNode => !!child && child.visible && !child.absolute);
   if (items.length === 0) return { layout: "row", gap: 10, sizeX: "hug", sizeY: "hug" };
   const centre = (item: SceneNode, horizontal: boolean) => (horizontal ? item.x + item.width / 2 : item.y + item.height / 2);
   const spread = (horizontal: boolean) => {

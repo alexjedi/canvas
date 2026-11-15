@@ -1,12 +1,12 @@
 import { apply, invert, mat, setWorld } from "../doc/geometry";
-import { abort, begin, end, nodes, transact } from "../doc/store";
+import { abort, begin, end, nodes } from "../doc/store";
 import type { VectorPath } from "../doc/types";
-import { commitVector, globalPoint, locatePoint, nearestSegment, pixelPaths, splitSegment, STRIDE, toggleSmooth } from "../doc/vector";
+import { commitVector, globalPoint, locatePoint, nearestSegment, pixelPaths, splitSegment, STRIDE, toggleSmooth, type SegmentHit } from "../doc/vector";
 import { grid } from "../editor/prefs";
 import { camera, editor, setEditing, setHover, setPoints } from "../editor/state";
-import type { Tool } from "./types";
+import { DRAG_THRESHOLD, type Tool } from "./types";
 
-type Mode = "idle" | "points" | "handle";
+type Mode = "idle" | "points" | "handle" | "segment" | "pull";
 
 interface Grab {
   path: number;
@@ -29,6 +29,10 @@ export function createPointsTool(): Tool {
   let startY = 0;
   let grab: Grab = { path: 0, index: 0, side: 2 };
   let mirrored = false;
+  let segment: SegmentHit | null = null;
+  let dragged = false;
+  let startScreenX = 0;
+  let startScreenY = 0;
   let reachOpposite = 0;
   const inverse = mat();
 
@@ -108,6 +112,34 @@ export function createPointsTool(): Tool {
     commitVector(id, next, baseX, baseY);
   }
 
+  function bendSegment(dx: number, dy: number) {
+    if (!segment) return;
+    const next = clonePaths(base);
+    const p = next[segment.path].points;
+    const count = p.length / STRIDE;
+    const a = segment.segment * STRIDE;
+    const b = ((segment.segment + 1) % count) * STRIDE;
+    const t = segment.t;
+    const u = 1 - t;
+    const weight = 3 * t * u * (u * u + t * t);
+    p[a + 4] += (dx * u) / weight;
+    p[a + 5] += (dy * u) / weight;
+    p[b + 2] += (dx * t) / weight;
+    p[b + 3] += (dy * t) / weight;
+    commitVector(id, next, baseX, baseY);
+  }
+
+  function pullHandles(x: number, y: number) {
+    const next = clonePaths(base);
+    const p = next[grab.path].points;
+    const o = grab.index * STRIDE;
+    p[o + 4] = x;
+    p[o + 5] = y;
+    p[o + 2] = p[o] * 2 - x;
+    p[o + 3] = p[o + 1] * 2 - y;
+    commitVector(id, next, baseX, baseY);
+  }
+
   return {
     cursor: "default",
 
@@ -129,6 +161,9 @@ export function createPointsTool(): Tool {
       startX = local.x;
       startY = local.y;
       const reach = REACH / camera.zoom;
+      dragged = false;
+      startScreenX = pointer.sx;
+      startScreenY = pointer.sy;
 
       const handle = handleAt(local.x, local.y, reach);
       if (handle) {
@@ -140,9 +175,10 @@ export function createPointsTool(): Tool {
       if (anchor) {
         const global = globalPoint(base, anchor.path, anchor.index);
         if (pointer.alt) {
-          toggleSmooth(base[anchor.path], anchor.index);
-          transact(() => commitVector(id, base, baseX, baseY));
+          grab = anchor;
           setPoints([global]);
+          begin();
+          mode = "pull";
           return;
         }
         const selected = editor.points.includes(global);
@@ -153,13 +189,12 @@ export function createPointsTool(): Tool {
         return;
       }
 
-      const segment = nearestSegment(base, local.x, local.y);
-      if (segment && segment.distance <= reach) {
-        const index = splitSegment(base[segment.path], segment.segment, segment.t);
+      const near = nearestSegment(base, local.x, local.y);
+      if (near && near.distance <= reach) {
+        segment = near;
+        setPoints([]);
         begin();
-        commitVector(id, base, baseX, baseY);
-        setPoints([globalPoint(base, segment.path, index)]);
-        mode = "points";
+        mode = "segment";
         return;
       }
 
@@ -169,14 +204,27 @@ export function createPointsTool(): Tool {
 
     drag(pointer) {
       if (mode === "idle") return;
+      if (!dragged && Math.hypot(pointer.sx - startScreenX, pointer.sy - startScreenY) <= DRAG_THRESHOLD) return;
+      dragged = true;
       const local = apply(inverse, pointer.x, pointer.y);
       if (mode === "points") movePoints(grid(local.x - startX), grid(local.y - startY));
+      else if (mode === "segment") bendSegment(local.x - startX, local.y - startY);
+      else if (mode === "pull") pullHandles(local.x, local.y);
       else moveHandle(local.x, local.y, pointer.alt);
     },
 
     up() {
+      if (mode === "segment" && !dragged && segment) {
+        const index = splitSegment(base[segment.path], segment.segment, segment.t);
+        commitVector(id, base, baseX, baseY);
+        setPoints([globalPoint(base, segment.path, index)]);
+      } else if (mode === "pull" && !dragged) {
+        toggleSmooth(base[grab.path], grab.index);
+        commitVector(id, base, baseX, baseY);
+      }
       if (mode !== "idle") end();
       mode = "idle";
+      segment = null;
     },
 
     cancel() {

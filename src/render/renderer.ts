@@ -2,10 +2,11 @@ import { mat, multiply, setLocal, setWorld, unionBounds, type Mat } from "../doc
 import { nodes } from "../doc/store";
 import type { SceneNode } from "../doc/types";
 import { segmentCount, STRIDE } from "../doc/vector";
+import { hasLabel, LABEL_GAP, LABEL_HEIGHT, labelFont, labelWidth } from "../editor/labels";
 import { camera, editor, viewport } from "../editor/state";
 import { invalidate } from "../frame";
 import { createCache } from "./cache";
-import { cssColor, type Rgb } from "./color";
+import { cssColor, toHex, type Rgb } from "./color";
 import { createProgram, type Program } from "./gl";
 import { cornerRadius, isPaintable, paintOutset } from "./raster";
 import { MASK_FRAGMENT, SOLID_FRAGMENT, TEXTURE_FRAGMENT, VERTEX } from "./shaders";
@@ -19,6 +20,16 @@ const WHITE: Rgb = [1, 1, 1];
 const MAX_CLIP_DEPTH = 255;
 const FALLBACK_ACCENT: Rgb = [0.05, 0.6, 1];
 const FALLBACK_GUIDE: Rgb = [1, 0.25, 0.3];
+const FALLBACK_MUTED: Rgb = [0.5, 0.5, 0.5];
+const LABEL_PAD = 2;
+
+interface Label {
+  texture: WebGLTexture;
+  key: string;
+  width: number;
+  height: number;
+  used: number;
+}
 
 export function createRenderer(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext("webgl2", {
@@ -44,6 +55,10 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   let scale = 1;
   let settled = true;
   let concealed = "";
+  let muted = FALLBACK_MUTED;
+  let frame = 0;
+  let pen: CanvasRenderingContext2D | null = null;
+  const labels = new Map<string, Label>();
 
   function setup() {
     texture = createProgram(gl!, VERTEX, TEXTURE_FRAGMENT, ["u_rect", "u_matrix", "u_resolution", "u_texture", "u_alpha"]);
@@ -62,6 +77,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   function readTheme() {
     accent = cssColor("--color-bl", FALLBACK_ACCENT);
     guide = cssColor("--color-re", FALLBACK_GUIDE);
+    muted = cssColor("--color-tx-3", FALLBACK_MUTED);
     invalidate();
   }
 
@@ -117,10 +133,16 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   function drawChildren(parent: SceneNode, depth: number, alpha: number, clipDepth: number) {
     if (stack.length <= depth + 1) stack.push(mat());
     const m = stack[depth + 1];
+    const lift = editor.lift;
     for (let i = 0; i < parent.children.length; i++) {
       const node = nodes.get(parent.children[i]);
       if (!node || !node.visible) continue;
       multiply(m, stack[depth], setLocal(m, node));
+      const lifted = lift?.get(node.id);
+      if (lifted) {
+        m[4] = lifted.x * stack[0][0] + stack[0][4];
+        m[5] = lifted.y * stack[0][3] + stack[0][5];
+      }
       measure(node, m, paintOutset(node));
       const visible = onScreen();
       const hasChildren = node.children.length > 0;
@@ -283,8 +305,76 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
+  function resolveLabel(node: SceneNode, tint: Rgb): Label | null {
+    const ratio = viewport.dpr;
+    const color = toHex(tint);
+    const key = `${node.name}|${color}|${ratio}`;
+    const existing = labels.get(node.id);
+    if (existing && existing.key === key) return existing;
+    pen ??= document.createElement("canvas").getContext("2d");
+    if (!pen) return null;
+    const width = Math.ceil((labelWidth(node.name) + LABEL_PAD * 2) * ratio);
+    const height = Math.ceil(LABEL_HEIGHT * ratio);
+    pen.canvas.width = width;
+    pen.canvas.height = height;
+    pen.font = labelFont(ratio);
+    pen.textBaseline = "middle";
+    pen.fillStyle = color;
+    pen.fillText(node.name, LABEL_PAD * ratio, height / 2);
+    const target = existing?.texture ?? gl!.createTexture();
+    if (!target) return null;
+    gl!.bindTexture(gl!.TEXTURE_2D, target);
+    gl!.pixelStorei(gl!.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, gl!.RGBA, gl!.UNSIGNED_BYTE, pen.canvas);
+    if (!existing) {
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.LINEAR);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
+      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
+    }
+    const label: Label = { texture: target, key, width, height, used: frame };
+    labels.set(node.id, label);
+    return label;
+  }
+
+  function drawLabels(page: SceneNode) {
+    frame++;
+    const view = stack[0];
+    const ratio = viewport.dpr;
+    const rise = (LABEL_HEIGHT + LABEL_GAP) * ratio;
+    let drawn = 0;
+    for (const id of page.children) {
+      const node = nodes.get(id);
+      if (!node || !hasLabel(node) || id === editor.renaming) continue;
+      const x = node.x * view[0] + view[4];
+      const y = node.y * view[3] + view[5];
+      const reach = labelWidth(node.name) * ratio + rise;
+      if (x < -reach || y < -reach || x > canvas.width + reach || y > canvas.height + reach) continue;
+      const label = resolveLabel(node, editor.selected.has(id) || editor.hover === id ? accent : muted);
+      if (!label) continue;
+      label.used = frame;
+      drawn++;
+      setLocal(world, node);
+      world[4] = node.rotation === 0 ? Math.round(x) : x;
+      world[5] = node.rotation === 0 ? Math.round(y) : y;
+      use(texture);
+      gl!.bindTexture(gl!.TEXTURE_2D, label.texture);
+      upload(texture, world, -LABEL_PAD * ratio, -Math.round(rise), label.width, label.height);
+      gl!.uniform1f(texture.uniforms.u_alpha, 1);
+      gl!.drawArrays(gl!.TRIANGLE_STRIP, 0, 4);
+    }
+    if (labels.size <= drawn) return;
+    for (const [id, label] of labels) {
+      if (label.used === frame) continue;
+      gl!.deleteTexture(label.texture);
+      labels.delete(id);
+    }
+  }
+
   function drawOverlay() {
     gl!.disable(gl!.STENCIL_TEST);
+    const page = nodes.get(editor.page);
+    if (page) drawLabels(page);
     use(solid);
     gl!.uniform4f(solid.uniforms.u_rect, 0, 0, 1, 1);
     const thin = Math.max(1, Math.round(viewport.dpr));
@@ -297,7 +387,16 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     if (selection.length > 1) {
       const bounds = unionBounds(selection);
       if (bounds) {
-        strokeRect(bounds.x * view[0] + view[4], bounds.y * view[3] + view[5], bounds.width * view[0], bounds.height * view[3], thin);
+        const left = bounds.x * view[0] + view[4];
+        const top = bounds.y * view[3] + view[5];
+        const right = left + bounds.width * view[0];
+        const bottom = top + bounds.height * view[3];
+        const size = HANDLE_SIZE * viewport.dpr;
+        strokeRect(left, top, right - left, bottom - top, thin);
+        square(left, top, size, false);
+        square(right, top, size, false);
+        square(right, bottom, size, false);
+        square(left, bottom, size, false);
       }
     }
     for (const item of editor.guides) {
@@ -360,6 +459,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   function onRestored() {
     cache.clear(false);
+    labels.clear();
     cache = createCache(gl!);
     setup();
     invalidate();
@@ -379,6 +479,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       canvas.removeEventListener("webglcontextrestored", onRestored);
       window.removeEventListener("themechange", readTheme);
       cache.clear(true);
+      for (const label of labels.values()) gl!.deleteTexture(label.texture);
+      labels.clear();
     },
   };
 }

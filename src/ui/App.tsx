@@ -4,6 +4,7 @@ import { attachShortcuts } from "../editor/shortcuts";
 import { DesignPanel } from "./design/DesignPanel";
 import { LayersPanel } from "./layers/LayersPanel";
 import { Stage } from "./Stage";
+import { StageControls } from "./StageControls";
 import { Toolbar } from "./Toolbar";
 
 export function App() {
@@ -15,6 +16,7 @@ export function App() {
         <LayersPanel />
         <main className="relative flex min-w-0 flex-1 flex-col">
           <Stage />
+          <StageControls />
           <Toolbar />
         </main>
         <DesignPanel />

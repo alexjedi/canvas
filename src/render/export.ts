@@ -1,11 +1,12 @@
 import { ensureBitmap, getBitmap, getBlob } from "../doc/assets";
 import { collectSubtree } from "../doc/create";
+import { mat, setWorld, unionBounds } from "../doc/geometry";
 import { nodes } from "../doc/store";
-import { fontFamilyCss, layoutText } from "../doc/text";
+import { fontFamilyCss, layoutText, type TextLayout } from "../doc/text";
 import type { Paint, SceneNode } from "../doc/types";
 import { tracePaths, type PathSink } from "../doc/vector";
 import { linearAxis, radialStretch } from "./paint";
-import { cornerRadius, paintNode, strokeOffset, strokeOutset, tracePath, type Context } from "./raster";
+import { cornerRadius, lineOrigin, paintNode, strokeOffset, strokeOutset, tracePath, type Context } from "./raster";
 
 export type ExportFormat = "png" | "jpg" | "svg";
 
@@ -105,8 +106,26 @@ function paintAttributes(key: "fill" | "stroke", paint: Paint, node: SceneNode, 
   return ` ${key}="url(#${id})"${opacity}`;
 }
 
+function richMarkup(node: SceneNode, layout: TextLayout, defs: string[]): string {
+  const stroke = node.stroke;
+  const outline =
+    stroke && stroke.width > 0 ? `${paintAttributes("stroke", stroke, node, defs)} stroke-width="${round(stroke.width)}" stroke-linejoin="round"` : "";
+  let spans = "";
+  (layout.rich ?? []).forEach((line, index) => {
+    const origin = lineOrigin(node, layout, index);
+    for (const fragment of line.fragments) {
+      const style = layout.runs[fragment.run];
+      const paint = style.fill ? paintAttributes("fill", style.fill, node, defs) : ` fill="none"`;
+      const spacing = style.letterSpacing ? ` letter-spacing="${round(style.letterSpacing)}"` : "";
+      spans += `<tspan x="${round(origin + fragment.x)}" y="${round(line.baseline)}" font-family="${escapeXml(fontFamilyCss(style.fontFamily))}" font-size="${round(style.fontSize)}" font-weight="${style.fontWeight}"${spacing}${paint}>${escapeXml(fragment.text)}</tspan>`;
+    }
+  });
+  return `<text xml:space="preserve"${outline}>${spans}</text>`;
+}
+
 function textMarkup(node: SceneNode, defs: string[]): string {
   const layout = layoutText(node);
+  if (layout.rich) return richMarkup(node, layout, defs);
   const { fill, stroke } = node;
   const anchor = layout.align === "left" ? "start" : layout.align === "center" ? "middle" : "end";
   const x = layout.align === "left" ? 0 : layout.align === "center" ? node.width / 2 : node.width;
@@ -135,7 +154,8 @@ function serialize(node: SceneNode, defs: string[], urls: Map<string, string>): 
   const { fill, stroke } = node;
   if (node.kind === "text") return textMarkup(node, defs);
   const parts: string[] = [];
-  if (fill) parts.push(shape(node, 0, paintAttributes("fill", fill, node, defs)));
+  const rule = node.kind === "vector" && node.evenOdd ? ` fill-rule="evenodd"` : "";
+  if (fill) parts.push(shape(node, 0, paintAttributes("fill", fill, node, defs) + rule));
   const bitmap = node.kind === "image" ? getBitmap(node.asset) : undefined;
   const url = urls.get(node.asset);
   if (bitmap && url) {
@@ -155,7 +175,7 @@ function serialize(node: SceneNode, defs: string[], urls: Map<string, string>): 
     }
   }
   if (stroke && stroke.width > 0) {
-    const limit = node.kind === "vector" ? ` stroke-miterlimit="4"` : "";
+    const limit = node.kind === "vector" ? ` stroke-miterlimit="4" stroke-linejoin="${stroke.join}" stroke-linecap="${stroke.cap}"` : "";
     parts.push(shape(node, strokeOffset(node), ` fill="none"${paintAttributes("stroke", stroke, node, defs)} stroke-width="${round(stroke.width)}"${limit}`));
   }
   const children: string[] = [];
@@ -178,23 +198,51 @@ function serialize(node: SceneNode, defs: string[], urls: Map<string, string>): 
   return parts.join("");
 }
 
-async function renderSvg(node: SceneNode, tree: SceneNode[]): Promise<Blob> {
+async function assetUrls(ids: readonly string[]): Promise<Map<string, string>> {
   const urls = new Map<string, string>();
-  for (const item of tree) {
-    const blob = item.asset && !urls.has(item.asset) ? getBlob(item.asset) : undefined;
-    if (blob) urls.set(item.asset, await readDataUrl(blob));
+  for (const id of ids) {
+    for (const item of collectSubtree(id)) {
+      if (!item.asset || urls.has(item.asset)) continue;
+      await ensureBitmap(item.asset);
+      const blob = getBlob(item.asset);
+      if (blob) urls.set(item.asset, await readDataUrl(blob));
+    }
   }
-  const outset = strokeOutset(node);
-  const width = round(node.width + outset * 2);
-  const height = round(node.height + outset * 2);
-  const defs: string[] = [];
-  const body = serialize(node, defs, urls);
-  const opacity = node.opacity < 1 ? ` opacity="${round(node.opacity)}"` : "";
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${round(-outset)} ${round(-outset)} ${width} ${height}">` +
+  return urls;
+}
+
+function wrapSvg(x: number, y: number, width: number, height: number, defs: string[], body: string): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${round(width)}" height="${round(height)}" viewBox="${round(x)} ${round(y)} ${round(width)} ${round(height)}">` +
     (defs.length ? `<defs>${defs.join("")}</defs>` : "") +
-    `<g${opacity}>${body}</g></svg>`;
-  return new Blob([svg], { type: "image/svg+xml" });
+    `${body}</svg>`
+  );
+}
+
+const opacityAttribute = (node: SceneNode) => (node.opacity < 1 ? ` opacity="${round(node.opacity)}"` : "");
+
+export async function svgMarkup(ids: readonly string[]): Promise<string> {
+  const list = ids.map((id) => nodes.get(id)).filter((node): node is SceneNode => !!node);
+  if (list.length === 0) return "";
+  const urls = await assetUrls(ids);
+  const defs: string[] = [];
+  if (list.length === 1) {
+    const node = list[0];
+    const outset = strokeOutset(node);
+    const body = `<g${opacityAttribute(node)}>${serialize(node, defs, urls)}</g>`;
+    return wrapSvg(-outset, -outset, node.width + outset * 2, node.height + outset * 2, defs, body);
+  }
+  const bounds = unionBounds(ids);
+  if (!bounds) return "";
+  let outset = 0;
+  let body = "";
+  for (const node of list) {
+    outset = Math.max(outset, strokeOutset(node));
+    const m = setWorld(mat(), node);
+    const transform = `matrix(${round(m[0])} ${round(m[1])} ${round(m[2])} ${round(m[3])} ${round(m[4] - bounds.x)} ${round(m[5] - bounds.y)})`;
+    body += `<g transform="${transform}"${opacityAttribute(node)}>${serialize(node, defs, urls)}</g>`;
+  }
+  return wrapSvg(-outset, -outset, bounds.width + outset * 2, bounds.height + outset * 2, defs, body);
 }
 
 function download(blob: Blob, name: string) {
@@ -214,7 +262,7 @@ export async function exportNodes(ids: readonly string[], format: ExportFormat, 
     if (node.width + reach <= 0 || node.height + reach <= 0) continue;
     const tree = collectSubtree(id);
     await Promise.all(tree.filter((item) => item.asset).map((item) => ensureBitmap(item.asset)));
-    const blob = format === "svg" ? await renderSvg(node, tree) : await renderBitmap(node, scale, format);
+    const blob = format === "svg" ? new Blob([await svgMarkup([id])], { type: "image/svg+xml" }) : await renderBitmap(node, scale, format);
     if (!blob) continue;
     const suffix = format !== "svg" && scale !== 1 ? `@${scale}x` : "";
     download(blob, `${node.name.replace(/[\\/:*?"<>|]/g, "-")}${suffix}.${format}`);

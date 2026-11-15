@@ -1,6 +1,5 @@
-import { isLayout } from "../../doc/layout";
-import { nodes } from "../../doc/store";
-import type { SceneNode, Sizing } from "../../doc/types";
+import { inFlow, isLayout } from "../../doc/layout";
+import type { Sizing } from "../../doc/types";
 import { setSelected } from "../../editor/actions";
 import { Row } from "../controls/Row";
 import { Select } from "../controls/Select";
@@ -8,13 +7,11 @@ import { MIXED, useSelected, useSelectionEvery } from "../hooks";
 
 const LABELS: Record<Sizing, string> = { fixed: "Fixed", hug: "Hug", fill: "Fill" };
 
-const inLayout = (node: SceneNode) => isLayout(nodes.get(node.parent));
-
 export function SizingRow() {
   const sizeX = useSelected("sizeX");
   const sizeY = useSelected("sizeY");
   const canHug = useSelectionEvery(isLayout);
-  const canFill = useSelectionEvery(inLayout);
+  const canFill = useSelectionEvery(inFlow);
   if (!canHug && !canFill) return null;
 
   const options = (["fixed", "hug", "fill"] as Sizing[])

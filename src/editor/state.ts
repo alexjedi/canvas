@@ -1,7 +1,7 @@
 import { discardEmpty } from "../doc/create";
 import { ancestors } from "../doc/geometry";
 import { nodes } from "../doc/store";
-import { ROOT, type Point, type Rect } from "../doc/types";
+import { ROOT, type Point, type Rect, type SceneNode } from "../doc/types";
 import { setHitSlop } from "../doc/vector";
 import { invalidate } from "../frame";
 
@@ -14,6 +14,11 @@ export interface Guide {
   y1: number;
 }
 export type DropPosition = "above" | "below" | "inside";
+
+export interface TextRange {
+  start: number;
+  end: number;
+}
 
 export interface Camera {
   x: number;
@@ -46,6 +51,10 @@ export const editor = {
   editing: "",
   points: NO_POINTS,
   pen: null as Point | null,
+  lift: null as ReadonlyMap<string, Point> | null,
+  renaming: "",
+  range: null as TextRange | null,
+  tree: 0,
 };
 
 const cameras = new Map<string, Camera>();
@@ -56,8 +65,33 @@ export function setEditing(id: string) {
   editor.editing = id;
   editor.points = NO_POINTS;
   editor.pen = null;
+  editor.range = null;
   if (previous) discardEmpty(previous);
   invalidate();
+}
+
+export function setLift(lift: ReadonlyMap<string, Point> | null) {
+  if (!lift && !editor.lift) return;
+  editor.lift = lift;
+  invalidate();
+}
+
+export function setRenaming(id: string) {
+  if (editor.renaming === id) return;
+  editor.renaming = id;
+  invalidate();
+}
+
+export function setRange(range: TextRange | null) {
+  const current = editor.range;
+  if (current === range || (current && range && current.start === range.start && current.end === range.end)) return;
+  editor.range = range;
+  invalidate();
+}
+
+export function rangeOf(node: SceneNode): TextRange {
+  const range = node.id === editor.editing ? editor.range : null;
+  return range && range.start !== range.end ? range : { start: 0, end: node.text.length };
 }
 
 export function setPoints(points: readonly number[]) {
@@ -77,7 +111,13 @@ export function select(ids: readonly string[]) {
   if (next.length === editor.selection.length && next.every((id, i) => id === editor.selection[i])) return;
   editor.selection = next.length ? next : EMPTY;
   editor.selected = new Set(next);
-  for (const id of next) for (const parent of ancestors(id)) editor.expanded.add(parent.id);
+  for (const id of next) {
+    for (const parent of ancestors(id)) {
+      if (editor.expanded.has(parent.id)) continue;
+      editor.expanded.add(parent.id);
+      editor.tree++;
+    }
+  }
   invalidate();
 }
 
@@ -125,6 +165,7 @@ export function clearDrop() {
 
 export function toggleExpanded(id: string) {
   if (!editor.expanded.delete(id)) editor.expanded.add(id);
+  editor.tree++;
   invalidate();
 }
 
@@ -158,6 +199,7 @@ export function sanitize() {
   if (editor.editing && !nodes.has(editor.editing)) setEditing("");
   select(editor.selection.filter((id) => nodes.has(id)));
   if (editor.hover && !nodes.has(editor.hover)) editor.hover = "";
+  if (editor.renaming && !nodes.has(editor.renaming)) editor.renaming = "";
 }
 
 export const toWorld = (sx: number, sy: number) => ({

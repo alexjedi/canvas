@@ -9,7 +9,7 @@ pnpm dev
 
 `pnpm build` typechecks and builds to `dist/`.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Images can also be pasted or dropped onto the canvas.
+Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · double-click a group or frame to go one level deeper · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘V` copy/paste · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Drag just outside a corner to rotate (`⇧` snaps to 15°). While editing points: click a line to add a point, drag a line to bend it, `⌥`-click a point to toggle corner/smooth, `⌥`-drag to pull out handles. While editing text: `⌘B` bold on the selected range. Images, SVG markup and plain text can be pasted; images and SVG files can be dropped onto the canvas. Right-click for Copy as SVG.
 
 The document and its images autosave to the browser.
 
@@ -23,6 +23,26 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
 - [ ] **Layers**: layer tree with reorder, rename, hide and lock
 - [ ] **Frame tool**: frames as containers, with auto layout (flexbox-style: direction, gap, padding, alignment, hug / fill / fixed)
 - [ ] **Move and scale tools**: select, move, resize, rotate
+- [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
+- [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
+- [ ] **Groups**: bounds follow the children
+- [ ] **Smart guides**: snap to sibling and parent edges and centres, optional pixel grid
+- [ ] **Align and distribute**
+- [ ] **Context menu**
+- [ ] **Page settings**: background colour
+- [ ] **Colour picker**: opacity, notation (hex, RGB, HSL, OKLCH), pick from canvas, palette and saved colours
+- [ ] **Text tool**
+- [ ] **Design side panel**
+  - [ ] Position
+  - [ ] Layout
+  - [ ] Appearance
+  - [ ] Export
+- [ ] **Preview in a device bezel**: show a frame inside a mockup using [Reel](https://reel.alexvoid.com). A preview only, not a prototyping tool.
+
+### Up next
+
+Written but waiting on a visual check: everything above except the bezel preview, plus everything below. Still unwritten: the bezel preview.
+
 - [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
 - [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
 - [ ] **Groups**: bounds follow the children
@@ -63,6 +83,9 @@ Written but waiting on a visual check: everything above except the bezel preview
   - [ ] Dragged auto layout child follows the cursor; wrap; absolute-positioned children
   - [ ] Mixed text styles inside one layer
   - [ ] Layer tree virtualization
+- [ ] **Clipboard**: paste SVG as editable layers, paste text as a text layer, copy as SVG
+- [ ] **Stroke caps and joins** on vectors; point panel in vector edit mode
+- [ ] **Confirmation before deleting a page**
 
 ### Look and feel
 

@@ -1,7 +1,7 @@
 import { ALargeSmall, MoveHorizontal, TextAlignCenter, TextAlignEnd, TextAlignStart, UnfoldVertical } from "lucide-react";
 import { useMemo } from "react";
 import type { TextAlign, TextSizing } from "../../doc/types";
-import { setSelected, setTextSizing } from "../../editor/actions";
+import { setSelected, setTextSizing, styleText } from "../../editor/actions";
 import { canLoadFonts, fontOptions, fonts, loadInstalledFonts } from "../../editor/fonts";
 import { Button } from "../controls/Button";
 import { NumberField } from "../controls/NumberField";
@@ -9,7 +9,7 @@ import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
 import { Segmented } from "../controls/Segmented";
 import { Select } from "../controls/Select";
-import { MIXED, numberOf, useFrame, useSelected } from "../hooks";
+import { MIXED, numberOf, useFrame, useSelected, useTextStyle } from "../hooks";
 
 const WEIGHTS = [
   { value: "100", label: "Thin" },
@@ -38,11 +38,11 @@ const SIZINGS: Array<{ value: TextSizing; label: string; title: string }> = [
 const textOf = <T extends string>(value: T | typeof MIXED | undefined): T | null => (typeof value === "string" ? value : null);
 
 export function TextSection() {
-  const family = textOf(useSelected("fontFamily"));
-  const weight = numberOf(useSelected("fontWeight"));
-  const size = numberOf(useSelected("fontSize"));
+  const family = textOf(useTextStyle("fontFamily"));
+  const weight = numberOf(useTextStyle("fontWeight"));
+  const size = numberOf(useTextStyle("fontSize"));
   const leading = numberOf(useSelected("lineHeight"));
-  const tracking = numberOf(useSelected("letterSpacing"));
+  const tracking = numberOf(useTextStyle("letterSpacing"));
   const align = textOf(useSelected("textAlign"));
   const sizing = textOf(useSelected("textSizing"));
   const installed = useFrame(() => fonts.installed);
@@ -50,15 +50,15 @@ export function TextSection() {
 
   return (
     <Section title="Text">
-      <Select value={family} options={families} onChange={(value) => setSelected("fontFamily", value)} />
+      <Select value={family} options={families} onChange={(fontFamily) => styleText({ fontFamily })} />
       <Row>
-        <Select value={weight === null ? null : String(weight)} options={WEIGHTS} onChange={(value) => setSelected("fontWeight", Number(value))} />
+        <Select value={weight === null ? null : String(weight)} options={WEIGHTS} onChange={(value) => styleText({ fontWeight: Number(value) })} />
         <NumberField
           label={<ALargeSmall size={13} />}
           name="Font size"
           min={1}
           value={size}
-          onChange={(value) => setSelected("fontSize", value, "fontSize")}
+          onChange={(fontSize) => styleText({ fontSize }, "fontSize")}
         />
       </Row>
       <Row>
@@ -75,7 +75,7 @@ export function TextSection() {
           name="Letter spacing"
           step={0.1}
           value={tracking}
-          onChange={(value) => setSelected("letterSpacing", value, "letterSpacing")}
+          onChange={(letterSpacing) => styleText({ letterSpacing }, "letterSpacing")}
         />
       </Row>
       <Segmented value={align} options={ALIGNMENTS} onChange={(value) => setSelected("textAlign", value)} />
