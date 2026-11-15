@@ -238,7 +238,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
-  function draw() {
+  function draw(overlay = true) {
     if (gl!.isContextLost() || canvas.width === 0 || canvas.height === 0) return;
     const page = nodes.get(editor.page);
     scale = camera.zoom * viewport.dpr;
@@ -259,8 +259,17 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     gl!.stencilOp(gl!.KEEP, gl!.KEEP, gl!.KEEP);
     cache.beginFrame();
     if (page) drawChildren(page, 0, 1, 0);
-    drawOverlay();
+    if (overlay) drawOverlay();
     if (cache.endFrame()) invalidate();
+  }
+
+  function sample(x: number, y: number): [number, number, number, number] | null {
+    if (gl!.isContextLost() || canvas.width === 0) return null;
+    draw(false);
+    const pixel = new Uint8Array(4);
+    gl!.readPixels(Math.round(x * viewport.dpr), canvas.height - Math.round(y * viewport.dpr) - 1, 1, 1, gl!.RGBA, gl!.UNSIGNED_BYTE, pixel);
+    invalidate();
+    return [pixel[0] / 255, pixel[1] / 255, pixel[2] / 255, pixel[3] / 255];
   }
 
   function onLost(event: Event) {
@@ -282,6 +291,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   return {
     draw,
+    sample,
     destroy() {
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);

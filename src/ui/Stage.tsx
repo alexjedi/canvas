@@ -4,6 +4,7 @@ import { fitIfNeeded } from "../editor/actions";
 import { editor } from "../editor/state";
 import { setDraw } from "../frame";
 import { createRenderer } from "../render/renderer";
+import { setSampler } from "../render/sample";
 import { attachInput } from "../tools/input";
 import { EditorMenu } from "./EditorMenu";
 import { useFrame } from "./hooks";
@@ -22,12 +23,14 @@ export function Stage() {
       return;
     }
     const detach = attachInput(canvas);
+    setSampler(renderer.sample);
     setDraw(() => {
       fitIfNeeded();
       renderer.draw();
     });
     return () => {
       setDraw(null);
+      setSampler(null);
       detach();
       renderer.destroy();
     };

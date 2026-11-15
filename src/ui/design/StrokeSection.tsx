@@ -31,7 +31,7 @@ export function StrokeSection() {
       {present && (
         <>
           <div className="grid grid-cols-[1fr_76px] gap-1.5">
-            <ColorField value={stroke?.color ?? null} onChange={(color) => update({ color })} />
+            <ColorField value={stroke} onChange={(paint) => update(paint)} />
             <NumberField
               label={<Blend size={12} />}
               name="Stroke opacity"

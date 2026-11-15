@@ -30,6 +30,7 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
 - [ ] **Align and distribute**
 - [ ] **Context menu**
 - [ ] **Page settings**: background colour
+- [ ] **Colour picker**: opacity, notation (hex, RGB, HSL, OKLCH), pick from canvas, palette and saved colours
 - [ ] **Text tool**
 - [ ] **Design side panel**
   - [ ] Position
@@ -37,6 +38,31 @@ Canvas is a small, fast vector editor: the basic design toolset and nothing more
   - [ ] Appearance
   - [ ] Export
 - [ ] **Preview in a device bezel**: show a frame inside a mockup using [Reel](https://reel.alexvoid.com). A preview only, not a prototyping tool.
+
+### Up next
+
+Written but waiting on a visual check: everything above except pen, text and the bezel preview.
+
+- [ ] **Pen and vector editing**
+  - [ ] `vector` layer: one or more open or closed paths of points with bezier handles; its box always fits the path
+  - [ ] Pen tool (`P`): click for a corner point, click-drag for a smooth one, click the first point to close, `Enter` or `Esc` to finish
+  - [ ] Edit mode (double-click or `Enter`): drag points and handles, click a segment to add a point, `⌫` deletes points, `⌥`-click toggles corner/smooth
+  - [ ] Entering edit mode on a rectangle or ellipse converts it to a path
+  - [ ] Exact hit testing on the shape; SVG export as `<path>`
+- [ ] **Text**
+  - [ ] `text` layer: font family, size, weight, line height, letter spacing, alignment; colour is the fill; one style per layer
+  - [ ] Resizing: auto width, auto height, fixed
+  - [ ] Text tool (`T`): click for auto-width text, drag for a fixed box; editing in a native text field placed over the layer
+  - [ ] Own line breaking so canvas, PNG and SVG export agree; SVG exports as `<text>`
+  - [ ] Fonts: common system families, plus installed fonts where the browser allows reading them
+- [ ] **Gradients**: fill type switch in the colour picker (solid, linear, radial), editable stops, on fills and strokes
+- [ ] **Smaller gaps**
+  - [ ] Resize handles for a multi-selection
+  - [ ] Rotate handle on canvas
+  - [ ] Frame name labels on canvas
+  - [ ] Dragged auto layout child follows the cursor; wrap; absolute-positioned children
+  - [ ] Mixed text styles inside one layer
+  - [ ] Layer tree virtualization
 
 ### Look and feel
 

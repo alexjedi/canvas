@@ -21,7 +21,7 @@ export function FillSection() {
     >
       {present && (
         <div className="grid grid-cols-[1fr_76px] gap-1.5">
-          <ColorField value={fill?.color ?? null} onChange={(color) => patchSelected("fill", { color }, DEFAULT_FILL)} />
+          <ColorField value={fill} onChange={(paint) => patchSelected("fill", paint, DEFAULT_FILL)} />
           <NumberField
             label={<Blend size={12} />}
             name="Fill opacity"

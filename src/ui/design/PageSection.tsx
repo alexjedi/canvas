@@ -29,7 +29,7 @@ export function PageSection() {
           />
         }
       >
-        {fill && <ColorField value={fill.color} onChange={(color) => setPageProps({ fill: { color, opacity: 1 } }, "page-background")} />}
+        {fill && <ColorField value={fill} alpha={false} onChange={(paint) => setPageProps({ fill: paint }, "page-background")} />}
       </Section>
       <Section title="Snapping">
         <Switch label="Snap to pixel grid" checked={pixelGrid} onChange={(value) => setPref("pixelGrid", value)} />

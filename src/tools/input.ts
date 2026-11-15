@@ -1,7 +1,8 @@
 import { ancestors, hitTest } from "../doc/geometry";
 import { flushDirty } from "../doc/store";
 import { addImages, fitIfNeeded, zoomAt } from "../editor/actions";
-import { camera, editor, select, setCamera, toWorld, viewport, type ToolId } from "../editor/state";
+import { camera, editor, select, setCamera, setEyedropper, toWorld, viewport, type ToolId } from "../editor/state";
+import { pickColor } from "../render/sample";
 import { invalidate, subscribe } from "../frame";
 import { createShapeTool } from "./create";
 import { handTool } from "./hand";
@@ -65,6 +66,16 @@ export function attachInput(canvas: HTMLCanvasElement) {
 
   function onPointerDown(event: PointerEvent) {
     if (active) return;
+    if (editor.eyedropper && event.button === 0) {
+      const pointer = pointerOf(event);
+      const pick = editor.eyedropper;
+      const color = pickColor(pointer.sx, pointer.sy);
+      setEyedropper(null);
+      if (color) pick(color);
+      canvas.style.cursor = current().cursor;
+      event.preventDefault();
+      return;
+    }
     if (event.button === 2 || (event.button === 0 && event.ctrlKey && IS_MAC)) {
       selectForMenu(pointerOf(event));
       return;
@@ -86,7 +97,7 @@ export function attachInput(canvas: HTMLCanvasElement) {
       return;
     }
     const tool = current();
-    canvas.style.cursor = tool.hover?.(pointer) ?? tool.cursor;
+    canvas.style.cursor = editor.eyedropper ? "crosshair" : (tool.hover?.(pointer) ?? tool.cursor);
   }
 
   function onPointerUp(event: PointerEvent) {
@@ -147,6 +158,9 @@ export function attachInput(canvas: HTMLCanvasElement) {
       if (space) return;
       space = true;
       if (!active) canvas.style.cursor = handTool.cursor;
+    } else if (event.key === "Escape" && editor.eyedropper) {
+      event.stopImmediatePropagation();
+      setEyedropper(null);
     } else if (event.key === "Escape" && active) {
       event.stopImmediatePropagation();
       const tool = active;

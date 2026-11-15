@@ -36,6 +36,7 @@ export const editor = {
   hover: "",
   marquee: null as Rect | null,
   guides: NO_GUIDES,
+  eyedropper: null as ((color: string) => void) | null,
   expanded: new Set<string>(),
   drop: null as { id: string; position: DropPosition } | null,
 };
@@ -71,6 +72,11 @@ export function setMarquee(rect: Rect | null) {
 export function setGuides(guides: readonly Guide[]) {
   if (guides.length === 0 && editor.guides.length === 0) return;
   editor.guides = guides.length ? guides : NO_GUIDES;
+  invalidate();
+}
+
+export function setEyedropper(pick: ((color: string) => void) | null) {
+  editor.eyedropper = pick;
   invalidate();
 }
 
