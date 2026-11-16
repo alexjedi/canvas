@@ -1,110 +1,86 @@
 # Canvas
 
+A small, fast vector editor that runs in the browser: the basic design toolset and nothing more.
+
+**Try it: [canvas.alexvoid.com](https://canvas.alexvoid.com)**
+
+## Goal
+
+Canvas covers the part of a design tool that gets used every day (frames, shapes, vectors, text, auto layout, export) and leaves the rest out. Speed is the main criterion for every decision: the editor should open at once and stay smooth on a large document.
+
+It was built first for one person on a MacBook and is public for anyone to use, fork or learn from. There is no account and no server: the document and its images are saved in your browser.
+
+## Features
+
+- **Pages and layers**: several pages per document; a layer tree with reorder, rename, hide and lock
+- **Frames and auto layout**: frames as containers with device presets; flexbox-style layout with direction, gap, padding, alignment, wrap, hug / fill / fixed sizing and absolute children
+- **Shapes and images**: rectangle, ellipse and image (cover, contain, stretch, tile)
+- **Pen and vector editing**: draw paths, edit points and bezier handles, bend segments, toggle corner and smooth points; stroke caps and joins
+- **Text**: font family, size, weight, line height, letter spacing and alignment; auto-width, auto-height and fixed boxes; mixed styles in one layer
+- **Colour**: solid, linear and radial fills on fills and strokes; opacity; hex, RGB, HSL and OKLCH notation; pick from canvas; saved colours
+- **Move, scale and rotate**: with smart guides that snap to sibling and parent edges and centres, and an optional pixel grid
+- **Arrange**: align, distribute, tidy up, group and ungroup
+- **Clipboard**: copy, cut, paste and duplicate; paste images, SVG markup and plain text; drop images and SVG files onto the canvas; copy as SVG
+- **Export**: PNG, JPG and SVG, at 0.5x to 4x
+- **Open in Reel**: send a frame to [Reel](https://reel.alexvoid.com) to see it inside a device bezel
+- **Undo and redo**, and autosave to the browser
+
+## Shortcuts
+
+| Action | Keys |
+| --- | --- |
+| Move · Scale · Hand | `V` · `K` · `H` or hold `Space` |
+| Frame · Rectangle · Ellipse | `F` · `R` · `O` |
+| Pen · Text · Image | `P` · `T` · `⇧⌘K` |
+| Edit points or text | `Enter` or double-click |
+| Go one level into a group or frame | double-click |
+| Finish | `Esc` |
+| Undo · Redo | `⌘Z` · `⇧⌘Z` |
+| Copy · Cut · Paste · Duplicate | `⌘C` · `⌘X` · `⌘V` · `⌘D` |
+| Drag a copy | `⌥`-drag (`⇧` locks the axis) |
+| Group · Ungroup | `⌘G` · `⇧⌘G` |
+| Auto layout | `⇧A` |
+| Hide · Lock | `⇧⌘H` · `⇧⌘L` |
+| Delete | `⌫` |
+| Nudge | arrows (`⇧` for ×10) |
+| Bring to front · Send to back | `]` · `[` |
+| Zoom to fit · 100% | `⇧1` · `⌘0` |
+| Zoom | pinch or `⌘`-scroll |
+| Rotate | drag just outside a corner (`⇧` snaps to 15°) |
+| Bold on the selected text | `⌘B` |
+
+While editing points: click a line to add a point, drag a line to bend it, `⌥`-click a point to toggle corner and smooth, `⌥`-drag to pull out handles.
+
 ## Develop
+
+Canvas needs [Node](https://nodejs.org) and [pnpm](https://pnpm.io).
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-`pnpm build` typechecks and builds to `dist/`.
+`pnpm build` typechecks and builds a static site to `dist/`, which any static host can serve.
 
-Shortcuts: `V` move · `K` scale · `F` frame · `R` rectangle · `O` ellipse · `P` pen · `T` text · `Enter` or double-click edit points or text · double-click a group or frame to go one level deeper · `Esc` finish · `⇧⌘K` image · `H` or hold `Space` hand · `⌘Z` / `⇧⌘Z` undo/redo · `⌘D` duplicate · `⌘C` / `⌘X` / `⌘V` copy/cut/paste · `⌥`-drag copy (`⇧` locks the axis) · `⌘G` / `⇧⌘G` group/ungroup · `⇧A` auto layout · `⇧⌘H` hide · `⇧⌘L` lock · `⌫` delete · arrows nudge (`⇧` ×10) · `]` / `[` front/back · `⇧1` zoom to fit · `⌘0` 100% · pinch or `⌘`-scroll to zoom. Drag just outside a corner to rotate (`⇧` snaps to 15°). While editing points: click a line to add a point, drag a line to bend it, `⌥`-click a point to toggle corner/smooth, `⌥`-drag to pull out handles. While editing text: `⌘B` bold on the selected range. Images, SVG markup and plain text can be pasted; images and SVG files can be dropped onto the canvas. Right-click for Copy as SVG.
-
-The document and its images autosave to the browser.
+Under the hood it is TypeScript, React and Tailwind CSS on Vite, with a WebGL2 compositor over Canvas2D-rasterized layer textures.
 
 ## Todo
 
-Canvas is a small, fast vector editor: the basic design toolset and nothing more. Built first for one person on a MacBook, public for anyone to use.
+- [ ] Layer tree virtualization for very large documents
+- [ ] Saved documents that follow you across devices, on [x2sdk](https://github.com/algox2/x2sdk)
+- [ ] Sharing a document by link
+- [ ] Live multiplayer
 
-### Requirements
+The server-backed items are optional: Canvas will keep working as a static, local-only app when no server is configured.
 
-- [ ] **Pages**: several pages per document
-- [ ] **Layers**: layer tree with reorder, rename, hide and lock
-- [ ] **Frame tool**: frames as containers, with auto layout (flexbox-style: direction, gap, padding, alignment, hug / fill / fixed)
-- [ ] **Move and scale tools**: select, move, resize, rotate
-- [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
-- [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
-- [ ] **Groups**: bounds follow the children
-- [ ] **Smart guides**: snap to sibling and parent edges and centres, optional pixel grid
-- [ ] **Align and distribute**
-- [ ] **Context menu**
-- [ ] **Page settings**: background colour
-- [ ] **Colour picker**: opacity, notation (hex, RGB, HSL, OKLCH), pick from canvas, palette and saved colours
-- [ ] **Text tool**
-- [ ] **Design side panel**
-  - [ ] Position
-  - [ ] Layout
-  - [ ] Appearance
-  - [ ] Export
-- [ ] **Preview in a device bezel**: show a frame inside a mockup using [Reel](https://reel.alexvoid.com). A preview only, not a prototyping tool.
+## Contributing
 
-### Up next
+Issues and pull requests are welcome. For anything larger than a small fix, please open an issue first to agree on the approach.
 
-Written but waiting on a visual check: everything above and below. The bezel preview is a hand-off to Reel rather than an in-app mockup.
+## License
 
-- [ ] **Pen and vector editing**: draw paths, edit points and bezier handles
-- [ ] **Shapes**: rectangle, ellipse, image (fill, fit, stretch, tile)
-- [ ] **Groups**: bounds follow the children
-- [ ] **Smart guides**: snap to sibling and parent edges and centres, optional pixel grid
-- [ ] **Align and distribute**
-- [ ] **Context menu**
-- [ ] **Page settings**: background colour
-- [ ] **Colour picker**: opacity, notation (hex, RGB, HSL, OKLCH), pick from canvas, palette and saved colours
-- [ ] **Text tool**
-- [ ] **Design side panel**
-  - [ ] Position
-  - [ ] Layout
-  - [ ] Appearance
-  - [ ] Export
-- [ ] **Preview in a device bezel**: show a frame inside a mockup using [Reel](https://reel.alexvoid.com). A preview only, not a prototyping tool.
-
-### Up next
-
-Written but waiting on a visual check: everything above except the bezel preview, plus pen and vector editing, text, and gradients below. Still unwritten: the smaller gaps and the bezel preview.
-
-- [ ] **Pen and vector editing**
-  - [ ] `vector` layer: one or more open or closed paths of points with bezier handles; its box always fits the path
-  - [ ] Pen tool (`P`): click for a corner point, click-drag for a smooth one, click the first point to close, `Enter` or `Esc` to finish
-  - [ ] Edit mode (double-click or `Enter`): drag points and handles, click a segment to add a point, `⌫` deletes points, `⌥`-click toggles corner/smooth
-  - [ ] Entering edit mode on a rectangle or ellipse converts it to a path
-  - [ ] Exact hit testing on the shape; SVG export as `<path>`
-- [ ] **Text**
-  - [ ] `text` layer: font family, size, weight, line height, letter spacing, alignment; colour is the fill; one style per layer
-  - [ ] Resizing: auto width, auto height, fixed
-  - [ ] Text tool (`T`): click for auto-width text, drag for a fixed box; editing in a native text field placed over the layer
-  - [ ] Own line breaking so canvas, PNG and SVG export agree; SVG exports as `<text>`
-  - [ ] Fonts: common system families, plus installed fonts where the browser allows reading them
-- [ ] **Gradients**: fill type switch in the colour picker (solid, linear, radial), editable stops, on fills and strokes
-- [ ] **Smaller gaps**
-  - [ ] Resize handles for a multi-selection
-  - [ ] Rotate handle on canvas
-  - [ ] Frame name labels on canvas
-  - [ ] Dragged auto layout child follows the cursor; wrap; absolute-positioned children
-  - [ ] Mixed text styles inside one layer
-  - [ ] Layer tree virtualization
-- [ ] **Clipboard**: paste SVG as editable layers, paste text as a text layer, copy as SVG
-- [ ] **Stroke caps and joins** on vectors; point panel in vector edit mode
-- [ ] **Confirmation before deleting a page**
-- [ ] **Frame presets** in the right panel while the Frame tool is active; a click inside a frame makes a shape half its size
-- [ ] **Scale panel** while the Scale tool is active: exact factor, proportional width and height
-- [ ] **Tidy up** and gap fields for a grid of selected layers
-- [ ] **Open in Reel**: copies the frame as an image and opens Reel with the matching device
-
-### Look and feel
-
-- [ ] Start with the alexvoid theme and component styles
-- [ ] Direction: a compact, dark, tool-first interface
-
-### Decided
-
-- [x] Platform: web only, TypeScript
-- [x] Renderer: WebGL2 compositor over Canvas2D-rasterized node textures
-
-### Later, maybe
-
-- [ ] Saved documents and multiplayer on x2sdk
+[MIT](LICENSE) © Alex Shevliakov
 
 ---
 
-<sub>Built in collaboration with [Claude](https://claude.com/claude-code) — thanks for the coworking on this repo.</sub>
+<sub>Built in collaboration with [Claude](https://claude.com/claude-code).</sub>
