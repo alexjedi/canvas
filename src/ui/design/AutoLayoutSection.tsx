@@ -1,6 +1,8 @@
-import { ArrowDown, ArrowRight, StretchHorizontal, StretchVertical } from "lucide-react";
+import { ArrowDown, ArrowRight, MoveHorizontal, MoveVertical, SquareDashed, StretchHorizontal, StretchVertical } from "lucide-react";
+import { useState } from "react";
 import type { CrossAlign, LayoutMode, MainAlign } from "../../doc/types";
-import { addAutoLayout, removeAutoLayout, setSelected } from "../../editor/actions";
+import { addAutoLayout, removeAutoLayout, setSelected, setSelectedPair } from "../../editor/actions";
+import { IconButton } from "../controls/IconButton";
 import { NumberField } from "../controls/NumberField";
 import { Row } from "../controls/Row";
 import { Section } from "../controls/Section";
@@ -35,9 +37,38 @@ const PADDING = [
   ["paddingBottom", "B", "Padding bottom"],
 ] as const;
 
-function PaddingField({ side, label, name }: { side: (typeof PADDING)[number][0]; label: string; name: string }) {
+type Side = (typeof PADDING)[number][0];
+
+function PaddingField({ side, label, name }: { side: Side; label: string; name: string }) {
   const value = useSelected(side);
   return <NumberField label={label} name={name} min={0} value={numberOf(value)} onChange={(next) => setSelected(side, next, side)} />;
+}
+
+function PaddingPair({ first, second, label, name }: { first: Side; second: Side; label: React.ReactNode; name: string }) {
+  const start = useSelected(first);
+  const end = useSelected(second);
+  return <NumberField label={label} name={name} min={0} value={start === end ? numberOf(start) : null} onChange={(next) => setSelectedPair(first, second, next)} />;
+}
+
+function PaddingRows() {
+  const [perSide, setPerSide] = useState(false);
+  return (
+    <div className="flex items-start gap-1.5">
+      <Row className="min-w-0 flex-1">
+        {perSide ? (
+          PADDING.map(([side, label, name]) => <PaddingField key={side} side={side} label={label} name={name} />)
+        ) : (
+          <>
+            <PaddingPair first="paddingLeft" second="paddingRight" label={<MoveHorizontal size={12} />} name="Horizontal padding" />
+            <PaddingPair first="paddingTop" second="paddingBottom" label={<MoveVertical size={12} />} name="Vertical padding" />
+          </>
+        )}
+      </Row>
+      <IconButton tip="Padding per side" active={perSide} onClick={() => setPerSide(!perSide)}>
+        <SquareDashed size={13} />
+      </IconButton>
+    </div>
+  );
 }
 
 export function AutoLayoutSection() {
@@ -71,11 +102,7 @@ export function AutoLayoutSection() {
               onChange={(value) => setSelected("gapCross", value, "gapCross")}
             />
           )}
-          <Row>
-            {PADDING.map(([side, label, name]) => (
-              <PaddingField key={side} side={side} label={label} name={name} />
-            ))}
-          </Row>
+          <PaddingRows />
         </>
       )}
     </Section>

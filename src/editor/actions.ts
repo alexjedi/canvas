@@ -51,6 +51,13 @@ export function setSelected<K extends keyof NodeProps>(key: K, value: NodeProps[
   }, mergeKey && `${mergeKey}:${editor.selection.join()}`);
 }
 
+export function setSelectedPair<K extends keyof NodeProps>(first: K, second: K, value: NodeProps[K]) {
+  transact(() => {
+    setSelected(first, value);
+    setSelected(second, value);
+  }, `${first}${second}:${editor.selection.join()}`);
+}
+
 export function patchSelected<K extends "fill" | "stroke">(key: K, patch: Partial<NonNullable<NodeProps[K]>>, fallback: NonNullable<NodeProps[K]>) {
   transact(() => {
     for (const id of editor.selection) {
